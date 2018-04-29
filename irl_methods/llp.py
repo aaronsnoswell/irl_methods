@@ -5,13 +5,12 @@ Russell, 2000
 """
 
 import math
-import copy
 import numpy as np
 
 from cvxopt import matrix, solvers
 
 
-def llp_irl(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
+def llp(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
     """
     Implements Linear Programming IRL for large state spaces by NG and
         Russell, 2000
@@ -232,6 +231,8 @@ def llp_irl(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
 
 if __name__ == "__main__":
 
+    import copy
+
     # Construct an IRL problem from the MountainCar benchmark
     print("Preparing MountainCar problem")
     import gym
@@ -339,7 +340,7 @@ if __name__ == "__main__":
     run_episode(p_fn, continuous=True)
     
     # Run IRL
-    alpha_vector, res = llp_irl(sf, M, k, T_nonexpert, phi, verbose=True)
+    alpha_vector, res = llp(sf, M, k, T_nonexpert, phi, verbose=True)
     print(alpha_vector)
 
     # Compose reward function

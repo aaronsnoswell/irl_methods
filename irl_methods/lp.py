@@ -10,7 +10,7 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def lp_irl(T, gamma, l1, *, Rmax=1.0):
+def lp(T, gamma, l1, *, Rmax=1.0):
     """
     Implements Linear Programming IRL by NG and Russell, 2000
 
@@ -221,7 +221,7 @@ if __name__ == "__main__":
         return Tfull
 
 
-    # Sample problem for lp_irl
+    # Sample problem for lp
     T = build_sorted_transition_matrix(
         np.array(["s0", "s1", "s2"]),
         np.array(["b", "o"]),
@@ -240,5 +240,5 @@ if __name__ == "__main__":
 
     # Try LP IRL
     print(T)
-    rewards, _ = lp_irl(T, 0.9, l1=10)
+    rewards, _ = lp(T, 0.9, l1=10)
     print(rewards)

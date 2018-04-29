@@ -11,7 +11,7 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def tlp_irl(zeta, T, S_bounds, A, phi, gamma, opt_pol, *, p=2.0, m=5000, H=30,
+def tlp(zeta, T, S_bounds, A, phi, gamma, opt_pol, *, p=2.0, m=5000, H=30,
         tol=1e-6, verbose=False, on_iteration=None):
     """
     Implements trajectory-based Linear Programming IRL by Ng and Russell, 2000
@@ -452,7 +452,7 @@ if __name__ == "__main__":
     # Perform trajectory based IRL
     # NB: MountainCar is not stocahstic, so we only need to sample m=1
     # trajectory to estimate trajectory value
-    alpha_vector, res = tlp_irl(
+    alpha_vector, res = tlp(
         [zeta],
         T,
         [
