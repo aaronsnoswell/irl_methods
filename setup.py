@@ -9,5 +9,5 @@ setup(name='irl_methods',
       author_email='aaron.snoswell@uqconnect.edu.au',
       license='MIT',
       packages=['irl_methods'],
-      install_requires=['numpy', 'cvxopt'],
+      install_requires=['numpy', 'cvxopt', 'gym'],
       zip_safe=False)
