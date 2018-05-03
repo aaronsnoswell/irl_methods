@@ -4,7 +4,6 @@ Implementation of Linear Programming IRL by Ng and Russell, 2000
 """
 
 import math
-import copy
 import numpy as np
 
 from cvxopt import matrix, solvers
@@ -32,6 +31,7 @@ def lp(T, gamma, l1, *, Rmax=1.0):
         function
 
     @param Rmax - Maximum reward value
+    @param verbose - Print progress information
 
     @return A reward vector for which the given policy is optimal
     @return A result object from the LP optimiser
@@ -40,21 +40,39 @@ def lp(T, gamma, l1, *, Rmax=1.0):
     the final vector. 
     """
 
+    print("Hello 1")
+
     # Measure size of state and action sets
     n = T.shape[0]
     k = T.shape[1]
 
+    print("Hello 2")
+
+    tmp1 = np.identity(n) - gamma * T[:, 0, :]
+
+    print(tmp1)
+
+    tmp2 = np.linalg.inv(tmp1)
+
+    print(tmp2)
+
     # Compute the discounted transition matrix term
-    T_disc_inv = np.linalg.inv(np.identity(n) - gamma * T[:, 0, :])
+    #Tfoozle = np.linalg.inv(np.identity(n) - gamma * T[:, 0, :])
+    Tfoozle = tmp2
+
+    print("Hello 3")
 
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
     # c, A_ub, b_ub = f(c, A_ub, b_ub)
+    #if verbose: print("Composing LP problem...")
 
     # Prepare LP constraint matrices
     c = np.zeros(shape=[1, n], dtype=float)
     A_ub = np.zeros(shape=[0, n], dtype=float)
     b_ub = np.zeros(shape=[0, 1])
+
+    print("Hello 4")
 
 
     def add_optimal_policy_constraints(c, A_ub, b_ub):
@@ -63,7 +81,7 @@ def lp(T, gamma, l1, *, Rmax=1.0):
         This will add (k-1) * n extra constraints
         """
         for i in range(k - 1):
-            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ T_disc_inv
+            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ Tfoozle
             A_ub = np.vstack((A_ub, constraint_rows))
             b_ub = np.vstack((b_ub, np.zeros(shape=[constraint_rows.shape[0], 1])))
         return c, A_ub, b_ub
@@ -87,7 +105,7 @@ def lp(T, gamma, l1, *, Rmax=1.0):
         # Add min{} operator constraints
         for i in range(k - 1):
             # Generate the costly single step constraint terms
-            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ T_disc_inv
+            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ Tfoozle
 
             # constraint_rows is nxn - we need to add the min{} terms though
             min_operator_entries = np.identity(n)
@@ -160,6 +178,8 @@ def lp(T, gamma, l1, *, Rmax=1.0):
             b_ub = np.vstack((b_ub, Rmax))
         return c, A_ub, b_ub
 
+    print("Hello 5")
+
     
     # Compose LP optimisation problem
     c, A_ub, b_ub = add_optimal_policy_constraints(c, A_ub, b_ub)
@@ -167,11 +187,23 @@ def lp(T, gamma, l1, *, Rmax=1.0):
     c, A_ub, b_ub = add_rmax_constraints(c, A_ub, b_ub, Rmax)
     c, A_ub, b_ub = add_l1norm_constraints(c, A_ub, b_ub, l1)
 
+    print("Hello 6")
+
+    #if verbose:
+    #    print("Number of optimisation variables: {}".format(c.shape[1]))
+    #    print("Number of constraints: {}".format(A_ub.shape[0]))
+
     # Solve for a solution
+    #if verbose: print("Solving LP problem...")
+
+    print("Hello 7")
 
     # NB: cvxopt.solvers.lp expects a 1d c vector
     from cvxopt import matrix, solvers
+    #solvers.options['show_progress'] = verbose
     res = solvers.lp(matrix(c[0, :]), matrix(A_ub), matrix(b_ub))
+
+    print("Hello 8")
 
 
     def normalize(vals):
@@ -185,60 +217,85 @@ def lp(T, gamma, l1, *, Rmax=1.0):
     # Extract the true optimisation variables and re-scale
     rewards = Rmax * normalize(res['x'][0:n]).T
 
+    print("Hello 9")
+
     return rewards, res
 
 
 if __name__ == "__main__":
 
+    import copy
+    from examples import GridWorldEnv
 
-    def build_sorted_transition_matrix(S, A, T, pi):
+    # Construct a gridworld
+    N = 5
+    gw = GridWorldEnv(N=N)
+    
+    # The expert policy used in Ng and Russell, 2000
+    expert_policy = [
+        ['→', '→', '→', '→', ' '],
+        ['↑', '→', '→', '↑', '↑'],
+        ['↑', '↑', '↑', '↑', '↑'],
+        ['↑', '↑', '→', '↑', '↑'],
+        ['↑', '→', '→', '→', '↑'],
+    ]
+
+
+    def order_transition_matrix(gw, policy):
         """
-        Given a vector of states S, a vector of actions A, a transition matrix
-        T(s-a, s') and a policy dictionary, builds a sorted transition matrix
-        T(s, a, s'), where the 0th action T(:, 0, :) corresponds to the expert
-        policy, and the ith action T(:, i, :), i!=0 corresponds to the ith non
-        -expert action at each state
+        Sort the transition matrix so that the given policy's actions are
+        first. This is a required precondition for using the linear
+        programming IRL method.
+
+        @param gw - GridWorldEnv object
+        @param policy - Expert policy 'a1'
+
+        @return Sorted transition matrix T[s, a, s'], where the 0th action
+            T[:, 0, :] corresponds to following the expert policy, and the
+            other action entries correspond to the remaining action options,
+            sorted according to the ordering in GridWorldEnv._A
         """
 
-        # Build the compact form Transition matrix
-        n = len(S)
-        k = len(A)
+        A = copy.copy(gw._A)
+        T = copy.copy(gw._T)
+        for y in range(gw._N):
+            for x in range(gw._N):
 
-        # Helper function to get a transition probability
-        si = lambda s: S.tolist().index(s)
-        ai = lambda a: A.tolist().index(a)
-        trans = lambda s1, a, s2: T[si(s1) * k + ai(a), si(s2)]
+                si = gw._state_index(x, y)
+                a = policy[y][x]
 
-        Tfull = np.zeros(shape=[n, k, n])
-        for s_from in S:
-            # Build vector of actions, sorted with the expert one first
-            expert_action = pi[s_from]
-            sorted_actions = np.append([expert_action], np.delete(A, ai(expert_action)))
-            for a in sorted_actions:
-                for s_to in S:
-                    Tfull[si(s_from), ai(a), si(s_to)] = trans(s_from, a, s_to)
+                if a == '↑':
+                    # Expert chooses north
+                    # North is already first in the GridWorldEnv._A ordering
+                    pass
+                elif a == '→':
+                    # Expert chooses east
+                    tmp = T[si, 0, :]
+                    T[si, 0, :] = T[si, 1, :]
+                    T[si, 1, :] = tmp
+                elif a == '↓':
+                    # Expert chooses south
+                    tmp = T[si, 0:1, :]
+                    T[si, 0, :] = T[si, 2, :]
+                    T[si, 1:2, :] = tmp
+                elif a == '←':
+                    # Expert chooses west
+                    tmp = T[si, 0:2, :]
+                    T[si, 0, :] = T[si, 3, :]
+                    T[si, 1:3, :] = tmp
+                else:
+                    # Expert doesn't care / does nothing
+                    pass
 
-        return Tfull
+        return T
 
 
-    # Sample problem for lp
-    T = build_sorted_transition_matrix(
-        np.array(["s0", "s1", "s2"]),
-        np.array(["b", "o"]),
-        np.array([[0,    0.4, 0.6 ],
-                  [0,    0,   1   ],
-                  [0,    0,   1   ],
-                  [0,    0,   1   ],
-                  [1,    0,   0   ],
-                  [1,    0,   0   ]]),
-        {
-            "s0": "b",
-            "s1": "o",
-            "s2": "o"
-        }
-    )
+    T = order_transition_matrix(gw, expert_policy)
 
-    # Try LP IRL
-    print(T)
-    rewards, _ = lp(T, 0.9, l1=10)
-    print(rewards)
+    gamma = 0.9
+    l1 = 10
+
+    # Run LP IRL
+    print("Doing IRL")
+    rewards, _ = lp(T, gamma, l1=l1)
+    #print(rewards)
