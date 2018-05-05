@@ -9,7 +9,7 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def lp(T, gamma, l1, *, Rmax=1.0):
+def lp(T, gamma, l1, *, Rmax=1.0, verbose=False):
     """
     Implements Linear Programming IRL by NG and Russell, 2000
 
@@ -37,30 +37,22 @@ def lp(T, gamma, l1, *, Rmax=1.0):
     @return A result object from the LP optimiser
 
     TODO: Adjust L1 norm constraint generation to allow negative rewards in
-    the final vector. 
-    """
+    the final vector.
 
-    print("Hello 1")
+    NB: Under If using Numpy with OpenBLAS 0.2.20 on Windows, there is a bug
+    that causes a deadlock with np.linalg.inv() for matrices larger than
+    24x24. A solution is to run OpenBLAS in single-threaded mode
+    (`set OPENBLAS_NUM_THREADS=1`) before executing this function. See 
+    https://github.com/numpy/numpy/issues/11041#issuecomment-386521546 for
+    more information.
+    """
 
     # Measure size of state and action sets
     n = T.shape[0]
     k = T.shape[1]
 
-    print("Hello 2")
-
-    tmp1 = np.identity(n) - gamma * T[:, 0, :]
-
-    print(tmp1)
-
-    tmp2 = np.linalg.inv(tmp1)
-
-    print(tmp2)
-
     # Compute the discounted transition matrix term
-    #Tfoozle = np.linalg.inv(np.identity(n) - gamma * T[:, 0, :])
-    Tfoozle = tmp2
-
-    print("Hello 3")
+    Tfoozle = np.linalg.inv(np.identity(n) - gamma * T[:, 0, :])
 
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
@@ -71,8 +63,6 @@ def lp(T, gamma, l1, *, Rmax=1.0):
     c = np.zeros(shape=[1, n], dtype=float)
     A_ub = np.zeros(shape=[0, n], dtype=float)
     b_ub = np.zeros(shape=[0, 1])
-
-    print("Hello 4")
 
 
     def add_optimal_policy_constraints(c, A_ub, b_ub):
@@ -178,8 +168,6 @@ def lp(T, gamma, l1, *, Rmax=1.0):
             b_ub = np.vstack((b_ub, Rmax))
         return c, A_ub, b_ub
 
-    print("Hello 5")
-
     
     # Compose LP optimisation problem
     c, A_ub, b_ub = add_optimal_policy_constraints(c, A_ub, b_ub)
@@ -187,23 +175,18 @@ def lp(T, gamma, l1, *, Rmax=1.0):
     c, A_ub, b_ub = add_rmax_constraints(c, A_ub, b_ub, Rmax)
     c, A_ub, b_ub = add_l1norm_constraints(c, A_ub, b_ub, l1)
 
-    print("Hello 6")
 
-    #if verbose:
-    #    print("Number of optimisation variables: {}".format(c.shape[1]))
-    #    print("Number of constraints: {}".format(A_ub.shape[0]))
+    if verbose:
+       print("Number of optimisation variables: {}".format(c.shape[1]))
+       print("Number of constraints: {}".format(A_ub.shape[0]))
 
     # Solve for a solution
-    #if verbose: print("Solving LP problem...")
-
-    print("Hello 7")
+    if verbose: print("Solving LP problem...")
 
     # NB: cvxopt.solvers.lp expects a 1d c vector
     from cvxopt import matrix, solvers
-    #solvers.options['show_progress'] = verbose
+    solvers.options['show_progress'] = verbose
     res = solvers.lp(matrix(c[0, :]), matrix(A_ub), matrix(b_ub))
-
-    print("Hello 8")
 
 
     def normalize(vals):
@@ -216,8 +199,6 @@ def lp(T, gamma, l1, *, Rmax=1.0):
     
     # Extract the true optimisation variables and re-scale
     rewards = Rmax * normalize(res['x'][0:n]).T
-
-    print("Hello 9")
 
     return rewards, res
 
@@ -296,6 +277,7 @@ if __name__ == "__main__":
     l1 = 10
 
     # Run LP IRL
-    print("Doing IRL")
     rewards, _ = lp(T, gamma, l1=l1)
-    #print(rewards)
+    print(rewards)
+
+    
