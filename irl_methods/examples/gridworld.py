@@ -36,8 +36,8 @@ class GridWorldEnv(gym.Env):
         N = 5,
         wind = 0.3,
         edge_mode = EDGE_MODE_CLAMP,
-        initial_state = (5, 0),
-        goal_states = [(0, 5)],
+        initial_state = (4, 0),
+        goal_states = [(0, 4)],
         per_step_reward = 0,
         goal_reward = 1
         ):
@@ -147,7 +147,6 @@ class GridWorldEnv(gym.Env):
                         ai,
                         self._state_index(x + wind_dx, y + wind_dy)
                     ] += wind / len(self._A)
-
 
         # Gym visualisation object                        
         self.viewer = None
