@@ -171,6 +171,14 @@ class GridWorldEnv(gym.Env):
         # Goal reward
         self._goal_reward = goal_reward
 
+        # Store true reward
+        self._R = np.array([
+            self._per_step_reward + self._goal_reward \
+                if (y, x) in self._goal_states \
+                    else self._per_step_reward \
+                        for y in range(self._N) for x in range(self._N)
+        ])
+
         # Reset the MDP
         self.seed()
         self.reset()
