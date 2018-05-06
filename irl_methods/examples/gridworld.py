@@ -262,3 +262,29 @@ class GridWorldEnv(gym.Env):
 
         if self.viewer:
             self.viewer.close()
+
+
+    def plot_reward(self, R):
+        """
+        Plots a given reward vector
+        """
+
+        import matplotlib.pyplot as plt
+
+        fig = plt.gcf()
+        ax = plt.gca()
+
+        line_width = 0.75
+        line_color = "#efefef"
+
+        plt.pcolor(
+            np.reshape(R, (self._N, self._N)),
+            edgecolors=line_color
+        )
+        plt.gca().invert_yaxis()
+        
+        ax.set_aspect("equal", adjustable="box")
+        ax.tick_params(length=0, labelbottom=False, labelleft=False)
+
+        # Figure is now ready for display or saving
+        return fig
