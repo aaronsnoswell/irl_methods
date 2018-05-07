@@ -10,7 +10,7 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def llp(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
+def llp(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
     """
     Implements Linear Programming IRL for large state spaces by NG and
         Russell, 2000
@@ -18,20 +18,21 @@ def llp(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
     See https://thinkingwires.com/posts/2018-02-13-irl-tutorial-1.html for a
         good reference.
     
-    @param sf - A state factory function that takes no arguments and returns
-        an i.i.d. sample from the MDP state space
-    @param M - The number of sub-samples to draw from the state space |S_0|
+    @param sf - A state factory function sf() -> numpy array that takes no
+        arguments and returns an i.i.d. sample from the MDP state space
+    @param M - The number of sub-samples to draw from the state space (|S_0|)
         when estimating the expert's reward function
-    @param k - The number of actions |A|
+    @param k - The number of actions (|A|)
     @param T - A sampling transition function T(s, ai) -> s' encoding a
         stationary deterministic policy. The structure of T must be that the
         0th action T(:, 0) corresponds to a sample from the expert policy, and
         T(:, i), i != 0 corresponds to a sample from the ith non-expert action
-        at each state, for some arbitrary but consistent ordering of states
-    @param phi - A vector of d basis functions phi_i(s) mapping from S to real
+        at each state, for some arbitrary but consistent ordering of actions
+    @param phi - A vector of basis functions phi_i(s) mapping from S to real
         numbers
+
     @param N - Number of transition samples to use when computing expectations
-        over the Value basis functions
+        over the Value basis functions. For deterministic MDPs, this can be 1.
     @param p - Penalty function coefficient. Ng and Russell find p=2 is robust
         Must be >= 1
     @param verbose - If true, progress information will be shown
@@ -49,91 +50,62 @@ def llp(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
     assert p >= 1, \
         "Penalty function coefficient must be >= 1, was {}".format(p)
 
-    def compute_value_expectation_tensor(sf, M, k, T, phi, N, verbose):
+
+    def expectation(fn, sf, N):
         """
-        Computes the value expectation tensor VE
+        Helper function to estimate an expectation over some function fn(sf())
 
-        This is an array of shape (d, k-1, M) where VE[:, i, j] is a vector of
-        coefficients that, when multiplied with the alpha vector give the
-        expected difference in value between the expert policy action and the
-        ith action from state s_j
+        @param fn - A function of a single variable that the expectation will
+            be computed over
+        @param sf - A state factory function - takes no variables and returns
+            an i.i.d. sample from the state space
+        @param N - The number of draws to use when estimating the expectation
 
-        @param sf - A state factory function that takes no arguments and returns
-            an i.i.d. sample from the MDP state space
-        @param M - The number of sub-samples to draw from the state space |S_0|
-            when estimating the expert's reward function
-        @param k - The number of actions |A|
-        @param T - A sampling transition function T(s, ai) -> s' encoding a
-            stationary deterministic policy. The structure of T must be that the
-            0th action T(:, 0) corresponds to a sample from the expert policy, and
-            T(:, i), i != 0 corresponds to a sample from the ith non-expert action
-            at each state, for some arbitrary but consistent ordering of states
-        @param phi - A vector of d basis functions phi_i(s) mapping from S to real
-            numbers
-        @param N - Number of transition samples to use when computing expectations
-            over the value basis functions
-        @param verbose - If true, progress information will be shown
-
-        @return The value expectation tensor VE. A numpy array of shape
-            (d, k-1, M)
+        @return An estimate of the expectation E[fn(sf())]
         """
+        state = sf()
+        return sum([fn(sf()) for n in range(N)]) / N
 
 
-        def expectation(fn, sf, N):
-            """
-            Helper function to estimate an expectation over some function fn(sf())
-
-            @param fn - A function of a single variable that the expectation will
-                be computed over
-            @param sf - A state factory function - takes no variables and returns
-                an i.i.d. sample from the state space
-            @param N - The number of draws to use when estimating the expectation
-
-            @return An estimate of the expectation E[fn(sf())]
-            """
-            state = sf()
-            return sum([fn(sf()) for n in range(N)]) / N
-
-
-        # Measure number of basis functions
-        d = len(phi)
-
-        # Prepare tensor
-        VE_tensor = np.zeros(shape=(d, k-1, M))
-
-        # Draw M initial states from the state space
-        for j in range(M):
-            if verbose: print("{} / {}".format(j, M))
-            s_j = sf()
-
-            # Compute E[phi(s')] where s' is drawn from the expert policy
-            expert_basis_expectations = np.array([
-                expectation(phi[di], lambda: T(s_j, 0), N) for di in range(d)
-            ])
-
-            # Loop over k-1 non-expert actions
-            for i in range(1, k):
-
-                # Compute E[phi(s')] where s' is drawn from the ith non-expert action
-                ith_non_expert_basis_expectations = np.array([
-                    expectation(phi[di], lambda: T(s_j, i), N) for di in range(d)
-                ])
-
-                # Compute and store the expectation difference for this initial
-                # state
-                VE_tensor[:, i-1, j] = expert_basis_expectations - \
-                    ith_non_expert_basis_expectations
-
-        return VE_tensor
-
+    # Measure number of basis functions
+    d = len(phi)
 
     # Precompute the value expectation tensor VE
     # This is an array of shape (d, k-1, M) where VE[:, i, j] is a vector of
     # coefficients that, when multiplied with the alpha vector give the
     # expected difference in value between the expert policy action and the
     # ith action from state s_j
-    if verbose: print("Computing expectations...")
-    VE_tensor = compute_value_expectation_tensor(sf, M, k, T, phi, N, verbose)
+    VE_tensor = np.zeros(shape=(d, k-1, M))
+
+    # Draw M initial states from the state space
+    for j in range(M):
+        if j % int(M/20) == 0 and verbose:
+            print("Computing expectations... ({:.1f}%)".format(j/M*100))
+
+        s_j = sf()
+
+        # Compute E[phi(s')] where s' is drawn from the expert policy
+        expert_basis_expectations = np.array([
+            expectation(phi[di], lambda: T(s_j, 0), N) for di in range(d)
+        ])
+
+        # Loop over k-1 non-expert actions
+        for i in range(1, k):
+
+            # Compute E[phi(s')] where s' is drawn from the ith non-expert action
+            ith_non_expert_basis_expectations = np.array([
+                expectation(phi[di], lambda: T(s_j, i), N) for di in range(d)
+            ])
+
+            # Compute and store the expectation difference for this initial
+            # state
+            VE_tensor[:, i-1, j] = expert_basis_expectations - \
+                ith_non_expert_basis_expectations
+
+    
+    # TODO ajs 06/Jun/18 Remove redundant and trivial VE_tensor entries as
+    # they create duplicate constraints
+
 
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
@@ -146,7 +118,8 @@ def llp(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
         Augments the objective and adds constraints to implement the Linear
         Programming IRL method for large state spaces
 
-        This will add M extra variables and 2M*(k-1) constraints
+        This will add up to M extra variables and 2M*(k-1) constraints
+        (it does not add 'trivial' constraints)
 
         NB: Assumes the true optimisation variables are first in the c vector
         """
@@ -159,8 +132,9 @@ def llp(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
         # Step 2: Add the constraints
 
         # Loop for each of the starting sampled states s_j
-        for j in range(M):
-            if verbose: print("CSS: Adding constraints ({:.2f}%)".format(j/M*100))
+        for j in range(VE_tensor.shape[2]):
+            if j % int(M/20) == 0 and verbose:
+                print("Adding constraints... ({:.1f}%)".format(j/M*100))
 
             # Loop over the k-1 non-expert actions
             for i in range(1, k):
@@ -229,74 +203,7 @@ def llp(sf, M, k, T, phi, *, N=1000, p=2.0, verbose=False):
 
 
 
-if __name__ == "__main__":
-
-    import copy
-
-    # Construct an IRL problem from the MountainCar benchmark
-    print("Preparing MountainCar problem")
-    import gym
-    env = gym.make('MountainCarContinuous-v0')
-    env._max_episode_steps = 999
-
-    # Lambda that returns i.i.d. samples from state space
-    sf = lambda: [
-            np.random.uniform(env.unwrapped.min_position, \
-                env.unwrapped.max_position),
-            np.random.uniform(-env.unwrapped.max_speed, \
-                env.unwrapped.max_speed)
-        ]
-
-    # Number of states to use for reward function estimation
-    M = 5000
-
-    # There are three possible actions
-    action_set = [0, 1, 2]
-    k = len(action_set)
-
-    # A simple 'expert' policy that solves the mountain car problem
-    simple_policy = lambda s: 0 if (s[1] - 0.003) < 0 else 2
-
-    # Transition function
-    def T(s, action):
-        env.reset()
-        env.unwrapped.state = s
-        observation, reward, done, info = env.step([action])
-        return observation
-
-    # Transition function
-    def T_nonexpert(s, action_index):
-        # Find the expert action at our current state
-        expert_action = simple_policy(s)
-        non_expert_action_set = copy.copy(action_set)
-        non_expert_action_set.remove(expert_action)
-
-        possible_action_set = [expert_action] +  non_expert_action_set
-        return T(s, possible_action_set[action_index])
-
-
-    def normal(mu, sigma, x):
-        """
-        1D Normal function
-        """
-
-        return math.exp(-1 * ((x - mu) ** 2) / (2 * sigma ** 2)) / \
-            math.sqrt(2 * math.pi * sigma ** 2)
-
-
-    # Build basis function set of size |d|
-    d = 26
-    sigma = 0.4
-    min_pos = env.unwrapped.min_position
-    max_pos = env.unwrapped.max_position
-    delta = (max_pos - min_pos) / d
-    phi = [
-        (lambda mu: lambda s: normal(mu, sigma, s[0]))(p) for p in np.arange(
-            min_pos + delta/2,
-            max_pos + delta/2,
-            delta
-        )
-    ]
+def solve_mc():
 
     # Solve the MDP using state, action discretisation for funtion
     # approximation
@@ -338,18 +245,112 @@ if __name__ == "__main__":
 
 
     run_episode(p_fn, continuous=True)
+
+
+
+if __name__ == "__main__":
+
+    """
+    This example re-creates the continuous mountain car experiment from the
+    original Ng and Russell paper
+    """
+
+    import copy
+    import gym
+
+    # Construct an IRL problem from the MountainCar benchmark
+    env = gym.make('MountainCarContinuous-v0')
+
+    # Lambda that returns i.i.d. samples from state space
+    sf = lambda: [
+        np.random.uniform(env.unwrapped.min_position, \
+            env.unwrapped.max_position),
+        np.random.uniform(-env.unwrapped.max_speed, \
+            env.unwrapped.max_speed)
+    ]
+
+    # Number of states to use for reward function estimation
+    M = 5000
+
+    # Discretise the action space so there are three possible actions
+    # 0 = Full left force
+    # 1 = Coast
+    # 2 = Full right force
+    A = [0, 1, 2]
+    k = len(A)
+
+
+    # Transition function
+    def T(s, action_index):
+        """
+        Sampling transition function encoding the expert's policy
+
+        That is, T[s, 0] takes the expert action and T[s, i] takes the ith
+        non-expert action
+        """
+
+        # A simple 'expert' policy that solves the mountain car problem by
+        # running 'bang-bang' control based on the velocity (with a bias term)
+        expert_policy = lambda s: 0 if (s[1] - 0.003) < 0 else 2
+
+        # Sort the action set based on the expert's current action
+        expert_action = expert_policy(s)
+        A_non_expert = copy.copy(A)
+        A_non_expert.remove(expert_action)
+        A_sorted = [expert_action] + A_non_expert
+
+        # Find the requested action
+        action = A_sorted[action_index]
+
+        # Reset and sample the environment to get the next state
+        env.reset()
+        env.unwrapped.state = s
+        observation, reward, done, info = env.step([action])
+        return observation
+
+
+    # We use gaussian basis functions
+    def normal(mu, sigma, x):
+        """
+        1D Normal function
+        """
+
+        return math.exp(-1 * ((x - mu) ** 2) / (2 * sigma ** 2)) / \
+            math.sqrt(2 * math.pi * sigma ** 2)
+
+
+    # Build basis function set of evenly spaced gaussians
+    # Sigma was guestimated as it isn't reported in the original paper
+    d = 26
+    sigma = 0.2
+    min_pos = env.unwrapped.min_position
+    max_pos = env.unwrapped.max_position
+    delta = (max_pos - min_pos) / d
+    phi = [
+        (lambda mu:
+            lambda s:
+                normal(mu, sigma, s[0])
+        )(p) for p in np.arange(
+            min_pos + delta/2,
+            max_pos + delta/2,
+            delta
+        )
+    ]
+
     
     # Run IRL
-    alpha_vector, res = llp(sf, M, k, T_nonexpert, phi, verbose=True)
+    alpha_vector, res = llp(sf, M, k, T, phi, verbose=True)
     print(alpha_vector)
 
-    # Compose reward function
+    # Compose reward function lambda
     R = lambda s: np.dot(alpha_vector, [phi[i](s) for i in range(len(phi))])[0]
 
-    # Show basis functions and reward function
+    # Produce a nice plot to show the discovered reward function
     import matplotlib.pyplot as plt
+    fig = plt.figure()
     x = np.linspace(env.unwrapped.min_position, env.unwrapped.max_position, 100)
 
+    # Plot basis functions
     for i in range(len(alpha_vector)):
         plt.plot(
             x,
@@ -357,10 +358,10 @@ if __name__ == "__main__":
             'r--'
         )
 
-    y = np.array(list(map(lambda s: R([s, 0]), x)))
+    # Plot reward function
     plt.plot(
         x,
-        y,
+        np.array(list(map(lambda s: R([s, 0]), x))),
         'b'
     )
 
