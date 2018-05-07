@@ -1,5 +1,4 @@
-"""
-Implementation of Linear Programming IRL by Ng and Russell, 2000
+"""Implementation of Linear Programming IRL by Ng and Russell, 2000
 (c) 2018 Aaron Snoswell
 """
 
@@ -16,7 +15,7 @@ def lp(T, gamma, l1, *, Rmax=1.0, verbose=False):
     Given a transition matrix T[s, a, s'] encoding a stationary, deterministic
     policy and a discount factor gamma finds a reward vector R(s) for which
     the policy is optimal.
-
+    
     This method uses the Linear Programming IRL algorithm by Ng and Russell,
     2000 (http://ai.stanford.edu/~ang/papers/icml00-irl.pdf). See
     https://www.inf.ed.ac.uk/teaching/courses/rl/slides17/8_IRL.pdf for a more
@@ -204,6 +203,11 @@ def lp(T, gamma, l1, *, Rmax=1.0, verbose=False):
 
 
 if __name__ == "__main__":
+
+    """
+    This example re-creates the 5x5 gridworld experiment from the original
+    Ng and Russell paper
+    """
 
     import copy
     from examples import GridWorldEnv
