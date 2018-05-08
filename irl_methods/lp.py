@@ -23,7 +23,7 @@ def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     for an accessible overview.
 
     Args:
-        T (numpy.array): A sorted transition matrix :math:`T[s, a, s']`
+        T (numpy array): A sorted transition matrix :math:`T[s, a, s']`
             encoding a stationary deterministic policy. The structure must be
             such that the 0th action :math:`T[:, 0, :]` corresponds to the
             expert policy, and :math:`T[:, i, :], i \\ne 0` corresponds to the
