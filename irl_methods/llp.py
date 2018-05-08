@@ -86,7 +86,7 @@ def llp(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
 
     # Draw M initial states from the state space
     for j in range(M):
-        if j % int(M/20) == 0 and verbose:
+        if j % max(int(M/20), 1) == 0 and verbose:
             print("Computing expectations... ({:.1f}%)".format(j/M*100))
 
         s_j = sf()
@@ -140,7 +140,7 @@ def llp(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
 
         # Loop for each of the starting sampled states s_j
         for j in range(VE_tensor.shape[2]):
-            if j % int(M/20) == 0 and verbose:
+            if j % max(int(M/20), 1) == 0 and verbose:
                 print("Adding constraints... ({:.1f}%)".format(j/M*100))
 
             # Loop over the k-1 non-expert actions
