@@ -1,7 +1,8 @@
-"""
-Implementation of Linear Programming IRL for large state spaces by Ng and
+# -*- coding: utf-8 -*-
+"""Implementation of Linear Programming IRL for large state spaces by Ng and
 Russell, 2000
-(c) 2018 Aaron Snoswell
+
+Copyright 2018 Aaron Snoswell
 """
 
 import math
@@ -11,36 +12,42 @@ from cvxopt import matrix, solvers
 
 
 def llp(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
-    """
-    Implements Linear Programming IRL for large state spaces by NG and
-        Russell, 2000
+    """Linear Programming IRL for large state spaces by Ng and Russell, 2000
 
-    See https://thinkingwires.com/posts/2018-02-13-irl-tutorial-1.html for a
-        good reference.
+    Given a sampling transition function :math:`T(s, a_i) \\mapsto s'`
+    encoding a stationary deterministic policy and a set of basis functions
+    :math:`\\phi(s)` over the state space, finds a weight vector
+    :math:`\\alpha` for which the given policy is optimal with respect to
+    :math:`R(s) = \\alpha \\cdot \\phi(s)`.
+
+    See `this blog post <https://thinkingwires.com/posts/2018-02-13-irl-tutorial-1.html>`_
+    for a good overview.
     
-    @param sf - A state factory function sf() -> numpy array that takes no
-        arguments and returns an i.i.d. sample from the MDP state space
-    @param M - The number of sub-samples to draw from the state space (|S_0|)
-        when estimating the expert's reward function
-    @param k - The number of actions (|A|)
-    @param T - A sampling transition function T(s, ai) -> s' encoding a
-        stationary deterministic policy. The structure of T must be that the
-        0th action T(:, 0) corresponds to a sample from the expert policy, and
-        T(:, i), i != 0 corresponds to a sample from the ith non-expert action
-        at each state, for some arbitrary but consistent ordering of actions
-    @param phi - A vector of basis functions phi_i(s) mapping from S to real
-        numbers
-
-    @param N - Number of transition samples to use when computing expectations
-        over the Value basis functions. For deterministic MDPs, this can be 1.
-    @param p - Penalty function coefficient. Ng and Russell find p=2 is robust
-        Must be >= 1
-    @param verbose - If true, progress information will be shown
-
-    @return A vector of d 'alpha' coefficients for the basis functions phi(S)
-        that allows rewards to be computed for a state via the inner product
-        alpha_i · phi
-    @return A result object from the optimiser
+    Args:
+        sf (function): A 'state factory' function that takes no arguments and
+            returns an i.i.d. sample from the MDP state space
+        M (int): The number of sub-samples to draw from the state space when
+            estimating the expert's reward function (:math:`|S_0|`)
+        k (int): The number of actions (:math:`|A|`)
+        T (function): A sampling transition function
+            :math:`T(s, a_i) \\mapsto s'` encoding a stationary deterministic
+            policy. The structure of T must be that the 0th action
+            :math:`T(:, 0)` corresponds to a sample from the expert policy,
+            and :math:`T(:, i), i \\ne 0` corresponds to a sample from the ith
+            non-expert action at each state, for some arbitrary but consistent
+            ordering of actions.
+        phi (list of functions): A vector of basis functions
+            :math:`\\phi_i(s)` that take a state and give a float.
+        N (int): Number of transition samples to use when computing
+            expectations. For deterministic MDPs, this can be left as 1.
+        p (float): Penalty function coefficient. Ng and Russell find p=2 is
+            robust. Must be >= 1.
+        verbose (bool): Print progress information
+    
+    Returns:
+        A tuple containing;
+            - A numpy array of alpha coefficients for the basis functions.
+            - A result object from the LP optimiser
     """
 
     # Measure number of basis functions
