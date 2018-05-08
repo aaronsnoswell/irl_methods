@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 """Implementation of Linear Programming IRL by Ng and Russell, 2000
-(c) 2018 Aaron Snoswell
+
+Copyright 2018 Aaron Snoswell
 """
 
 import math
@@ -8,32 +10,35 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def lp(T, gamma, l1, *, Rmax=1.0, verbose=False):
-    """
-    Implements Linear Programming IRL by NG and Russell, 2000
+def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
+    """Linear Programming IRL by NG and Russell, 2000
 
-    Given a transition matrix T[s, a, s'] encoding a stationary, deterministic
-    policy and a discount factor gamma finds a reward vector R(s) for which
-    the policy is optimal.
+    Given a transition matrix :math:`T[s, a, s']` encoding a stationary
+    deterministic policy and a discount factor gamma, finds a reward vector
+    :math:`R(s)` for which the policy is optimal.
+
+    This method implements the `Linear Programming IRL algorithm by Ng and
+    Russell <http://ai.stanford.edu/~ang/papers/icml00-irl.pdf>`_. See `This 
+    slide deck <https://www.inf.ed.ac.uk/teaching/courses/rl/slides17/8_IRL.pdf>`_
+    for an accessible overview.
+
+    Args:
+        T (numpy.array): A sorted transition matrix :math:`T[s, a, s']`
+            encoding a stationary deterministic policy. The structure must be
+            such that the 0th action :math:`T[:, 0, :]` corresponds to the
+            expert policy, and :math:`T[:, i, :], i \\ne 0` corresponds to the
+            ith non-expert action at each state.
+        gamma (float): The expert's discount factor. Must be in the range
+            :math:`[0, 1)`.
+        l1 (float): L1 norm regularization weight for the LP optimisation
+            objective function
+        Rmax (float): Maximum reward value
+        verbose (bool): Print progress information
     
-    This method uses the Linear Programming IRL algorithm by Ng and Russell,
-    2000 (http://ai.stanford.edu/~ang/papers/icml00-irl.pdf). See
-    https://www.inf.ed.ac.uk/teaching/courses/rl/slides17/8_IRL.pdf for a more
-    accessible overview.
-
-    @param T - A sorted transition matrix T[s, a, s'] encoding a stationary
-        deterministic policy. The structure of T must be that the 0th action
-        T[:, 0, :] corresponds to the expert policy, and T[:, i, :], i != 0
-        corresponds to the ith non-expert action at each state
-    @param gamma - The expert's discount factor
-    @param l1 - L1 regularization weight for LP optimisation objective
-        function
-
-    @param Rmax - Maximum reward value
-    @param verbose - Print progress information
-
-    @return A reward vector for which the given policy is optimal
-    @return A result object from the LP optimiser
+    Returns:
+        A tuple containing;
+            - The reward vector for which the given policy is optimal, and
+            - A result object from the LP optimiser
 
     TODO: Adjust L1 norm constraint generation to allow negative rewards in
     the final vector.
@@ -41,9 +46,9 @@ def lp(T, gamma, l1, *, Rmax=1.0, verbose=False):
     NB: Under If using Numpy with OpenBLAS 0.2.20 on Windows, there is a bug
     that causes a deadlock with np.linalg.inv() for matrices larger than
     24x24. A solution is to run OpenBLAS in single-threaded mode
-    (`set OPENBLAS_NUM_THREADS=1`) before executing this function. See 
-    https://github.com/numpy/numpy/issues/11041#issuecomment-386521546 for
-    more information.
+    (``set OPENBLAS_NUM_THREADS=1``) before executing this function. See 
+    `this numpy issue <https://github.com/numpy/numpy/issues/11041#issuecomment-386521546>`_
+    for more information.
     """
 
     # Measure size of state and action sets
