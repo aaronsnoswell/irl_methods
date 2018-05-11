@@ -11,33 +11,32 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def llp(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
+def lpl(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
     """Linear Programming IRL for large state spaces by Ng and Russell, 2000
 
-    Given a sampling transition function :math:`T(s, a_i) \\mapsto s'`
-    encoding a stationary deterministic policy and a set of basis functions
-    :math:`\\phi(s)` over the state space, finds a weight vector
-    :math:`\\alpha` for which the given policy is optimal with respect to
-    :math:`R(s) = \\alpha \\cdot \\phi(s)`.
+    Given a sampling transition function T(s, a_i) -> s' encoding a stationary
+    deterministic policy and a set of basis functions phi(s) over the state
+    space, finds a weight vector alpha for which the given policy is optimal
+    with respect to R(s) = alpha · phi(s).
 
-    See `this blog post <https://thinkingwires.com/posts/2018-02-13-irl-tutorial-1.html>`_
-    for a good overview.
+    See https://thinkingwires.com/posts/2018-02-13-irl-tutorial-1.html> for a
+    good overview of this method.
     
     Args:
         sf (function): A 'state factory' function that takes no arguments and
             returns an i.i.d. sample from the MDP state space
         M (int): The number of sub-samples to draw from the state space when
-            estimating the expert's reward function (:math:`|S_0|`)
-        k (int): The number of actions (:math:`|A|`)
-        T (function): A sampling transition function
-            :math:`T(s, a_i) \\mapsto s'` encoding a stationary deterministic
-            policy. The structure of T must be that the 0th action
-            :math:`T(:, 0)` corresponds to a sample from the expert policy,
-            and :math:`T(:, i), i \\ne 0` corresponds to a sample from the ith
+            estimating the expert's reward function (|S_0|)
+        k (int): The number of actions (|A|)
+        T (function): A sampling transition function T(s, a_i) -> s' encoding
+            a stationary deterministic policy. The structure of T must be that
+            the 0th action T(:, 0) corresponds to a sample from the expert
+            policy, and T(:, i), i!=0 corresponds to a sample from the ith
             non-expert action at each state, for some arbitrary but consistent
             ordering of actions.
-        phi (list of functions): A vector of basis functions
-            :math:`\\phi_i(s)` that take a state and give a float.
+        phi (list of functions): A vector of basis functions phi_i(s) that
+            take a state and give a float.
+
         N (int): Number of transition samples to use when computing
             expectations. For deterministic MDPs, this can be left as 1.
         p (float): Penalty function coefficient. Ng and Russell find p=2 is
@@ -112,7 +111,6 @@ def llp(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
     
     # TODO ajs 06/Jun/18 Remove redundant and trivial VE_tensor entries as
     # they create duplicate constraints
-
 
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
@@ -210,6 +208,7 @@ def llp(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
 
 
 
+"""
 def solve_mc():
 
     # Solve the MDP using state, action discretisation for funtion
@@ -232,9 +231,7 @@ def solve_mc():
 
 
     def nearest_in_list(x, lst):
-        """
-        Helper function to find the nearest entry in lst to x
-        """
+        # Helper function to find the nearest entry in lst to x
         nearest_index = -1
         nearest_dist = math.inf
         for li, i in enumerate(lst):
@@ -252,7 +249,7 @@ def solve_mc():
 
 
     run_episode(p_fn, continuous=True)
-
+"""
 
 
 if __name__ == "__main__":
@@ -266,7 +263,7 @@ if __name__ == "__main__":
     import gym
 
     # Construct an IRL problem from the MountainCar benchmark
-    env = gym.make('MountainCarContinuous-v0')
+    env = gym.make('MountainCar-v0')
 
     # Lambda that returns i.i.d. samples from state space
     sf = lambda: [
@@ -279,7 +276,7 @@ if __name__ == "__main__":
     # Number of states to use for reward function estimation
     M = 5000
 
-    # Discretise the action space so there are three possible actions
+    # There are three possible actions
     # 0 = Full left force
     # 1 = Coast
     # 2 = Full right force
@@ -288,17 +285,13 @@ if __name__ == "__main__":
 
 
     # Transition function
-    def T(s, action_index):
+    def T(s, action_index, expert_policy):
         """
         Sampling transition function encoding the expert's policy
 
         That is, T[s, 0] takes the expert action and T[s, i] takes the ith
         non-expert action
         """
-
-        # A simple 'expert' policy that solves the mountain car problem by
-        # running 'bang-bang' control based on the velocity (with a bias term)
-        expert_policy = lambda s: 0 if (s[1] - 0.003) < 0 else 2
 
         # Sort the action set based on the expert's current action
         expert_action = expert_policy(s)
@@ -312,8 +305,15 @@ if __name__ == "__main__":
         # Reset and sample the environment to get the next state
         env.reset()
         env.unwrapped.state = s
-        observation, reward, done, info = env.step([action])
+        observation, reward, done, info = env.step(action)
         return observation
+
+
+    # A transition function for a simple 'expert' policy that solves the
+    # mountain car problem by running 'bang-bang' control based on the
+    # velocity (with a bias term)
+    bb_policy = lambda s: 0 if (s[1] - 0.003) < 0 else 2
+    T_bb = lambda s, ai: T(s, ai, bb_policy)
 
 
     # We use gaussian basis functions
@@ -329,10 +329,10 @@ if __name__ == "__main__":
     # Build basis function set of evenly spaced gaussians
     # Sigma was guestimated as it isn't reported in the original paper
     d = 26
-    sigma = 0.2
     min_pos = env.unwrapped.min_position
     max_pos = env.unwrapped.max_position
     delta = (max_pos - min_pos) / d
+    sigma = delta * 0.25
     phi = [
         (lambda mu:
             lambda s:
@@ -346,7 +346,7 @@ if __name__ == "__main__":
 
     
     # Run IRL
-    alpha_vector, res = llp(sf, M, k, T, phi, verbose=True)
+    alpha_vector, res = lpl(sf, M, k, T_bb, phi, verbose=True)
     print(alpha_vector)
 
     # Compose reward function lambda
@@ -355,7 +355,7 @@ if __name__ == "__main__":
     # Produce a nice plot to show the discovered reward function
     import matplotlib.pyplot as plt
     fig = plt.figure()
-    x = np.linspace(env.unwrapped.min_position, env.unwrapped.max_position, 100)
+    x = np.linspace(env.unwrapped.min_position, env.unwrapped.max_position, 500)
 
     # Plot basis functions
     for i in range(len(alpha_vector)):
