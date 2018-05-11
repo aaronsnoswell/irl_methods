@@ -55,8 +55,8 @@ def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     n = T.shape[0]
     k = T.shape[1]
 
-    # Compute the discounted transition matrix term
-    Tfoozle = np.linalg.inv(np.identity(n) - gamma * T[:, 0, :])
+    # Compute the discounted transition matrix inverse term
+    T_disc_inv = np.linalg.inv(np.identity(n) - gamma * T[:, 0, :])
 
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
@@ -75,7 +75,7 @@ def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
         This will add (k-1) * n extra constraints
         """
         for i in range(k - 1):
-            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ Tfoozle
+            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ T_disc_inv
             A_ub = np.vstack((A_ub, constraint_rows))
             b_ub = np.vstack((b_ub, np.zeros(shape=[constraint_rows.shape[0], 1])))
         return c, A_ub, b_ub
@@ -99,7 +99,7 @@ def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
         # Add min{} operator constraints
         for i in range(k - 1):
             # Generate the costly single step constraint terms
-            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ Tfoozle
+            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ T_disc_inv
 
             # constraint_rows is nxn - we need to add the min{} terms though
             min_operator_entries = np.identity(n)
