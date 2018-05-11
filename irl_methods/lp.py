@@ -13,23 +13,24 @@ from cvxopt import matrix, solvers
 def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     """Linear Programming IRL by NG and Russell, 2000
 
-    Given a transition matrix :math:`T[s, a, s']` encoding a stationary
+    Given a transition matrix T[s, a, s'] encoding a stationary
     deterministic policy and a discount factor gamma, finds a reward vector
-    :math:`R(s)` for which the policy is optimal.
+    R(s) for which the policy is optimal.
 
     This method implements the `Linear Programming IRL algorithm by Ng and
-    Russell <http://ai.stanford.edu/~ang/papers/icml00-irl.pdf>`_. See `This 
-    slide deck <https://www.inf.ed.ac.uk/teaching/courses/rl/slides17/8_IRL.pdf>`_
-    for an accessible overview.
+    Russell <http://ai.stanford.edu/~ang/papers/icml00-irl.pdf>. See 
+    <https://www.inf.ed.ac.uk/teaching/courses/rl/slides17/8_IRL.pdf> for an
+    accessible overview.
 
     Args:
-        T (numpy array): A sorted transition matrix :math:`T[s, a, s']`
+        T (numpy array): A sorted transition matrix T[s, a, s']
             encoding a stationary deterministic policy. The structure must be
-            such that the 0th action :math:`T[:, 0, :]` corresponds to the
-            expert policy, and :math:`T[:, i, :], i \\ne 0` corresponds to the
-            ith non-expert action at each state.
+            such that the 0th action T[:, 0, :] corresponds to the expert
+            policy, and T[:, i, :], i != 0 corresponds to the ith non-expert
+            action at each state.
         gamma (float): The expert's discount factor. Must be in the range
-            :math:`[0, 1)`.
+            [0, 1).
+        
         l1 (float): L1 norm regularization weight for the LP optimisation
             objective function
         Rmax (float): Maximum reward value
@@ -44,11 +45,11 @@ def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     the final vector.
 
     NB: Under If using Numpy with OpenBLAS 0.2.20 on Windows, there is a bug
-    that causes a deadlock with np.linalg.inv() for matrices larger than
+    that causes a deadlock with `np.linalg.inv()` for matrices larger than
     24x24. A solution is to run OpenBLAS in single-threaded mode
-    (``set OPENBLAS_NUM_THREADS=1``) before executing this function. See 
-    `this numpy issue <https://github.com/numpy/numpy/issues/11041#issuecomment-386521546>`_
-    for more information.
+    (`set OPENBLAS_NUM_THREADS=1`) before executing this function. See 
+    <https://github.com/numpy/numpy/issues/11041#issuecomment-386521546> for
+    more information.
     """
 
     # Measure size of state and action sets
