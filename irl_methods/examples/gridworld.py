@@ -277,6 +277,73 @@ class GridWorldEnv(gym.Env):
             self.viewer.close()
 
 
+    def order_transition_matrix(self, policy):
+        """Computes a sorted transition matrix for the GridWorld MDP
+
+        Given a policy, defined as a 2D numpy array of unicode string arrows,
+        computes a sorted transition matrix T[s, a, s'] such that the 0th
+        action corresponds to the policy's action, and the ith action (i!=0)
+        corresponds to the ith non-policy action, for some arbitrary but
+        consistent ordering of actions.
+
+        E.g.
+
+        pi_star = [
+            ['→', '→', '→', '→', ' '],
+            ['↑', '→', '→', '↑', '↑'],
+            ['↑', '↑', '↑', '↑', '↑'],
+            ['↑', '↑', '→', '↑', '↑'],
+            ['↑', '→', '→', '→', '↑'],
+        ]
+
+        is the policy used in Ng and Russell's 2000 IRL paper. NB: a space
+        indicates a terminal state.
+
+        Args:
+            policy (numpy array) - Expert policy 'a1'. See the example above.
+
+        Returns:
+            A sorted transition matrix T[s, a, s'], where the 0th action
+            T[:, 0, :] corresponds to following the expert policy, and the
+            other action entries correspond to the remaining action options,
+            sorted according to the ordering in GridWorldEnv._A
+
+        """
+
+        A = copy.copy(self._A)
+        T = copy.copy(self._T)
+        for y in range(self._N):
+            for x in range(self._N):
+
+                si = self._state_index(x, y)
+                a = policy[y][x]
+
+                if a == '↑':
+                    # Expert chooses north
+                    # North is already first in the GridWorldEnv._A ordering
+                    pass
+                elif a == '→':
+                    # Expert chooses east
+                    tmp = T[si, 0, :]
+                    T[si, 0, :] = T[si, 1, :]
+                    T[si, 1, :] = tmp
+                elif a == '↓':
+                    # Expert chooses south
+                    tmp = T[si, 0:1, :]
+                    T[si, 0, :] = T[si, 2, :]
+                    T[si, 1:2, :] = tmp
+                elif a == '←':
+                    # Expert chooses west
+                    tmp = T[si, 0:2, :]
+                    T[si, 0, :] = T[si, 3, :]
+                    T[si, 1:3, :] = tmp
+                else:
+                    # Expert doesn't care / does nothing
+                    pass
+
+        return T
+
+
     def plot_reward(self, R):
         """
         Plots a given reward vector
