@@ -12,6 +12,9 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from lp import lp
 from gridworld import GridWorldEnv
 
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import ImageGrid
+
 
 def main():
 
@@ -39,8 +42,6 @@ def main():
     gamma = 0.9
 
     # Plot various LP IRL results against each other
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.axes_grid1 import ImageGrid
 
     fig = plt.figure()
     plt.set_cmap("viridis")
