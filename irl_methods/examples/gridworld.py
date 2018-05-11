@@ -152,7 +152,7 @@ class GridWorldEnv(gym.Env):
         self.viewer = None
 
         # Gym action space object (index corresponds to entry in self._A list)
-        self.action_space = gym.spaces.Discrete(self._N)
+        self.action_space = gym.spaces.Discrete(len(self._A))
 
         # Gym observation space object (observations are an index indicating
         # the current state)
