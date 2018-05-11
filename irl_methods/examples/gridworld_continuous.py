@@ -49,8 +49,7 @@ class GridWorldCtsEnv(gym.Env):
         per_step_reward = 0,
         goal_reward = 1
         ):
-        """
-        Constructor for the GridWorld environment
+        """Constructor for the GridWorld environment
 
         This MDP uses an x-first, y-up coordinate system
         """
@@ -120,8 +119,7 @@ class GridWorldCtsEnv(gym.Env):
 
 
     def seed(self, seed = None):
-        """
-        Set the random seed for the environment
+        """Set the random seed for the environment
         """
 
         self.np_random, seed = seeding.np_random(seed)
@@ -130,8 +128,7 @@ class GridWorldCtsEnv(gym.Env):
 
 
     def step(self, action):
-        """
-        Take one step in the environment
+        """Take one step in the environment
         """
 
         assert self.action_space.contains(action), \
@@ -144,11 +141,11 @@ class GridWorldCtsEnv(gym.Env):
         new_state += np.array(self._A[action]) * self._action_distance
 
         # Apply wind
-        new_state += np.random.uniform(low=0, high=self._wind_range, size=2)
+        new_state += np.random.uniform(low=-self._wind_range, high=self._wind_range, size=2)
 
         # Apply boundary condition
         if self._edge_mode == GridWorldCtsEnv.EDGE_MODE_WRAP:
-            self.state = new_state % 1.0
+            self.state = tuple(new_state % 1.0)
 
         else:
             self.state = tuple(map(lambda a: min(max(0, a), 1), new_state))
@@ -166,8 +163,7 @@ class GridWorldCtsEnv(gym.Env):
 
 
     def reset(self):
-        """
-        Reset the environment to it's initial state
+        """Reset the environment to it's initial state
         """
 
         self.state = self._initial_state
@@ -176,8 +172,7 @@ class GridWorldCtsEnv(gym.Env):
 
 
     def render(self, mode = 'human'):
-        """
-        Render the environment
+        """Render the environment
 
         TODO ajs 29/Apr/18 Implement viewer functionality
         """
@@ -197,8 +192,7 @@ class GridWorldCtsEnv(gym.Env):
 
 
     def close(self):
-        """
-        Close the environment
+        """Close the environment
         """
 
         if self.viewer:
