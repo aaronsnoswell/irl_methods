@@ -1,9 +1,13 @@
+# -*- coding: utf-8 -*-
 """
 Simple gridworld implementation from 'Algorithms for Inverse Reinforcement
 Learning' by Ng and Russell, 2000
+
+Copyright 2018 Aaron Snoswell
 """
 
 
+import copy
 import math
 import numpy as np
 
@@ -12,8 +16,7 @@ from gym.utils import seeding
 
 
 class GridWorldEnv(gym.Env):
-    """
-    A simple GridWorld MDP
+    """A simple GridWorld MDP
 
     Based on the GridWorld described in 'Algorithms for Inverse Reinforcement
     Learning' by Ng and Russell, 2000
@@ -28,6 +31,12 @@ class GridWorldEnv(gym.Env):
     # Edge mode static enum
     EDGE_MODE_CLAMP = 0
     EDGE_MODE_WRAP = 1
+
+    # Sytax sugar enum for actions
+    ACTION_NORTH = 0
+    ACTION_EAST = 1
+    ACTION_SOUTH = 2
+    ACTION_WEST = 3
 
 
     def __init__(
@@ -57,6 +66,10 @@ class GridWorldEnv(gym.Env):
         @param per_step_reward - Reward given every step
         @param goal_reward - Reward upon reaching the goal
         """
+
+        assert edge_mode == GridWorldEnv.EDGE_MODE_WRAP \
+            or edge_mode == GridWorldEnv.EDGE_MODE_CLAMP, \
+                "Invalid edge_mode: {}".format(edge_mode)
         
         # Size of the gridworld
         self._N = N
