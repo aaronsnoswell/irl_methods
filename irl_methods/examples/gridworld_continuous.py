@@ -205,3 +205,83 @@ class GridWorldCtsEnv(gym.Env):
         if self.viewer:
             self.viewer.close()
 
+
+    def get_optimal_policy(self):
+        """Returns an optimal policy function for this MDP
+
+        Returns:
+            (function): An optimal policy p(s) -> a that maps states to
+                actions
+        """
+
+        # Compute goal location
+        goal_positions = [np.mean(
+            np.vstack(
+                (
+                    self._goal_space.low,
+                    self._goal_space.high
+                )
+            ),
+            axis=0
+        )]
+
+        # If we're in a wrapping gridworld, the nearest goal could outside the
+        # world bounds. Add virtual goals to help the policy account for this
+        if self._edge_mode == GridWorldCtsEnv.EDGE_MODE_WRAP:
+            goal_positions.append(
+                goal_positions[0] - (1, 1)
+            )
+            goal_positions.append(
+                goal_positions[0] - (1, 0)
+            )
+            goal_positions.append(
+                goal_positions[0] - (0, 1)
+            )
+
+
+        def policy(state):
+            """A simple expert policy to solve the continuous gridworld
+            problem
+
+            Args:
+                state (tuple): The current MDP state as an (x, y) tuple of
+                    float
+
+            Returns:
+                (int): One of GridWorldCtsEnv.[ACTION_NORTH],
+                    GridWorldCtsEnv.ACTION_EAST, GridWorldCtsEnv.ACTION_SOUTH,
+                    or GridWorldCtsEnv.ACTION_WEST
+            """
+
+            # Pick the nearest goal
+            nearest_goal = None
+
+            if len(goal_positions) == 1:
+                # We only have one goal to consider
+                nearest_goal = goal_positions[0]
+
+            else:
+                # Find the nearest goal - it could be behind us
+                smallest_distance = math.inf
+                for g in goal_positions:
+                    distance = np.linalg.norm(np.array(g) - state)
+                    if distance < smallest_distance:
+                        smallest_distance = distance
+                        nearest_goal = g
+
+            # Find the distance to the goal
+            dx, dy = np.array(nearest_goal) - state
+
+            if abs(dx) > abs(dy):
+                # We need to move horizontally more than vertically
+                return GridWorldCtsEnv.ACTION_EAST if dx > 0 \
+                    else GridWorldCtsEnv.ACTION_WEST
+
+            else:
+                # We need to move vertically more than horizontally
+                return GridWorldCtsEnv.ACTION_NORTH if dy > 0  \
+                    else GridWorldCtsEnv.ACTION_SOUTH
+
+
+        return policy
+
