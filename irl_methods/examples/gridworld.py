@@ -31,12 +31,19 @@ class GridWorldEnv(gym.Env):
     # Edge mode static enum
     EDGE_MODE_CLAMP = 0
     EDGE_MODE_WRAP = 1
-
-    # Sytax sugar enum for actions
+    
+    # Sytax sugar helpers for actions
     ACTION_NORTH = 0
     ACTION_EAST = 1
     ACTION_SOUTH = 2
     ACTION_WEST = 3
+
+    ACTION_STRINGS = [
+        "North",
+        "East",
+        "South",
+        "West"
+    ]
 
 
     def __init__(
