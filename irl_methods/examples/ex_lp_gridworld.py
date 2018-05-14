@@ -71,14 +71,14 @@ def main():
         elif ai == 1:
 
             l1 = 0
-            reward, _ = lp(T, gamma, l1=l1)
+            reward, _ = lp(T, gamma, l1=l1, verbose=True)
             gw.plot_reward(reward)
             plt.title(r"IRL Result - $\lambda$={}".format(l1), fontsize=font_size)
 
         elif ai == 2:
 
             l1 = 1.05
-            reward, _ = lp(T, gamma, l1=l1)
+            reward, _ = lp(T, gamma, l1=l1, verbose=True)
             gw.plot_reward(reward)
             plt.title(r"IRL Result - $\lambda$={}".format(l1), fontsize=font_size)
 
