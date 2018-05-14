@@ -361,7 +361,6 @@ class GridWorldEnv(gym.Env):
         fig = plt.gcf()
         ax = plt.gca()
 
-        line_width = 0.75
         line_color = "#efefef"
 
         plt.pcolor(
