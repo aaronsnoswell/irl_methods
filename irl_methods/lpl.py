@@ -11,7 +11,7 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def lpl(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
+def lpl(s0, k, T, phi, *, N=1, p=2.0, verbose=False):
     """Linear Programming IRL for large state spaces by Ng and Russell, 2000
 
     Given a sampling transition function T(s, a_i) -> s' encoding a stationary
@@ -23,10 +23,8 @@ def lpl(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
     good overview of this method.
     
     Args:
-        sf (function): A 'state factory' function that takes no arguments and
-            returns an i.i.d. sample from the MDP state space
-        M (int): The number of sub-samples to draw from the state space when
-            estimating the expert's reward function (|S_0|)
+        s0 (list): A list of |s0|=M states that will be used to approximate the
+            reward function over the full state space
         k (int): The number of actions (|A|)
         T (function): A sampling transition function T(s, a_i) -> s' encoding
             a stationary deterministic policy. The structure of T must be that
@@ -49,6 +47,9 @@ def lpl(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
             - A result object from the LP optimiser
     """
 
+    # Measure number of sampled states
+    M = len(s0)
+
     # Measure number of basis functions
     d = len(phi)
 
@@ -56,43 +57,24 @@ def lpl(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
     assert p >= 1, \
         "Penalty function coefficient must be >= 1, was {}".format(p)
 
-
-    def expectation(fn, sf, N):
-        """
-        Helper function to estimate an expectation over some function fn(sf())
-
-        @param fn - A function of a single variable that the expectation will
-            be computed over
-        @param sf - A state factory function - takes no variables and returns
-            an i.i.d. sample from the state space
-        @param N - The number of draws to use when estimating the expectation
-
-        @return An estimate of the expectation E[fn(sf())]
-        """
-        state = sf()
-        return sum([fn(sf()) for n in range(N)]) / N
-
-
-    # Measure number of basis functions
-    d = len(phi)
+    # Helper to estimate the mean (expectation) of a stochastic function
+    E = lambda fn: sum([fn() for n in range(N)]) / N
 
     # Precompute the value expectation tensor VE
     # This is an array of shape (d, k-1, M) where VE[:, i, j] is a vector of
     # coefficients that, when multiplied with the alpha vector give the
     # expected difference in value between the expert policy action and the
-    # ith action from state s_j
+    # ith action from state j
     VE_tensor = np.zeros(shape=(d, k-1, M))
 
-    # Draw M initial states from the state space
-    for j in range(M):
+    # Loop over sampled initial states
+    for j, s_j in enumerate(s0):
         if j % max(int(M/20), 1) == 0 and verbose:
             print("Computing expectations... ({:.1f}%)".format(j/M*100))
 
-        s_j = sf()
-
         # Compute E[phi(s')] where s' is drawn from the expert policy
         expert_basis_expectations = np.array([
-            expectation(phi[di], lambda: T(s_j, 0), N) for di in range(d)
+            E(lambda: phi_i(T(s_j, 0))) for phi_i in phi
         ])
 
         # Loop over k-1 non-expert actions
@@ -100,14 +82,13 @@ def lpl(sf, M, k, T, phi, *, N=1, p=2.0, verbose=False):
 
             # Compute E[phi(s')] where s' is drawn from the ith non-expert action
             ith_non_expert_basis_expectations = np.array([
-                expectation(phi[di], lambda: T(s_j, i), N) for di in range(d)
+                E(lambda: phi_i(T(s_j, i))) for phi_i in phi
             ])
 
             # Compute and store the expectation difference for this initial
             # state
             VE_tensor[:, i-1, j] = expert_basis_expectations - \
                 ith_non_expert_basis_expectations
-
     
     # TODO ajs 06/Jun/18 Remove redundant and trivial VE_tensor entries as
     # they create duplicate constraints
