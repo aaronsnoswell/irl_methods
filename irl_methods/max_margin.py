@@ -117,6 +117,7 @@ def max_margin(
     initial_policy,
     step,
     rl_solver,
+    epsillon,
     *,
     start_states = None,
     max_trajectory_length = None,
@@ -125,8 +126,42 @@ def max_margin(
     """Maximum-margin IRL by Abbeel and Ng, 2004
     
     Args:
-    
+        trajectories (list): A list of expert demonstration trajectories, each
+            of which is a list of states (e.g. a numpy array)
+        phi (function): A function that takes a state and returns a vector of
+            features. NB: If the given state is None, must return the size
+            of the feature space.
+        gamma (float): Expert discount factor
+        initial_policy (function): Initial policy to seed the algorithm. A
+            function taking a state and returning an action.
+        step (function): MDP step function taking a state and action, and
+            returning a new state.
+        rl_solver (function): An RL solver that takes a reward function (that
+            takes a state and returns a reward), and returns an optimal
+            policy function.
+        epsillon (float): Convergence criteria - when the feature expectation
+            error gets below this value, the algorithm will terminate.
+
+        start_states (list): A list of seed states to use as the start of each
+            trajectory. Length defines how many trajectories to sample when
+            computing Mote-carlo estimates of the feature expectation for
+            each non-expert policy. If not given, the expert demonstration
+            starting states are used.
+        max_trajectory_length (int): The maximum length to consider when
+            computing feature expectations for the expert and non-expert
+            trajectories. If not given, the length of the longest expert
+            trajectory is used.
+        verbose (bool): Show progress information
+
     Returns:
+        (numpy array): Weights for the optimal reward function. Reward
+            function can be computed as w · phi(s)
+        (list): A list of the sub-optimal policy functions discovered during
+            execution. Blending between the last two elements in the list will
+            provide a policy with very close feature expectations to the
+            expert demonstrations.
+        (list): A list of the feature expectations for each sub-optimal policy
+            discovered during execution.
     """
 
     # Measure size of feature space
@@ -147,7 +182,7 @@ def max_margin(
 
     # Compute the emperical feature expectations for the expert's trajectories
     expert_feature_expectations = feature_expectations(
-        trajectories,
+        [t[0:max_trajectory_length] for t in trajectories],
         phi,
         gamma
     )
@@ -215,7 +250,6 @@ def max_margin(
     # two, we can get a policy that achieves very similar feature expectations
     # to the expert policy
     return w, \
-        reward_function, \
         nonexpert_policies, \
         nonexpert_feature_expectations
 
