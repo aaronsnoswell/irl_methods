@@ -10,7 +10,7 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def lp(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
+def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     """Linear Programming IRL by NG and Russell, 2000
 
     Given a transition matrix T[s, a, s'] encoding a stationary

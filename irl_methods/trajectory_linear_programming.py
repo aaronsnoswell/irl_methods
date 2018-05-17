@@ -11,8 +11,22 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def tlp(zeta, T, S_bounds, A, phi, gamma, opt_pol, *, p=2.0, m=5000, H=30,
-        tol=1e-6, verbose=False, on_iteration=None):
+def trajectory_linear_programming(
+    zeta,
+    T,
+    S_bounds,
+    A,
+    phi,
+    gamma,
+    opt_pol,
+    *,
+    p=2.0,
+    m=5000,
+    H=30,
+    tol=1e-6,
+    verbose=False, 
+    on_iteration=None
+    ):
     """
     Implements trajectory-based Linear Programming IRL by Ng and Russell, 2000
     

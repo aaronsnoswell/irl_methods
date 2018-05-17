@@ -11,7 +11,7 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def lpl(s0, k, T, phi, *, N=1, p=2.0, verbose=False):
+def large_linear_programming(s0, k, T, phi, *, N=1, p=2.0, verbose=False):
     """Linear Programming IRL for large state spaces by Ng and Russell, 2000
 
     Given a sampling transition function T(s, a_i) -> s' encoding a stationary

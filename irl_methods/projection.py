@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Implementation of Projection / Maximum-margin IRL by Abbeel and Ng, 2004
+"""Implementation of Projection IRL by Abbeel and Ng, 2004
 
 Copyright 2018 Aaron Snoswell
 """
@@ -145,7 +145,7 @@ def projection(
     max_trajectory_length = None,
     verbose = False
     ):
-    """Projection / Maximum-margin IRL by Abbeel and Ng, 2004
+    """Projection IRL by Abbeel and Ng, 2004
     
     Args:
         trajectories (list): A list of expert demonstration trajectories, each
