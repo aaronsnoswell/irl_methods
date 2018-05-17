@@ -7,7 +7,7 @@ Copyright 2018 Aaron Snoswell
 import math
 import numpy as np
 
-from thirdparty.robsvm import robsvm
+from thirdparty.robsvm import robust_svm_fit
 
 
 def find_mixing_weights(mu_e, mu_i):
@@ -96,39 +96,6 @@ def sample_trajectories(start_states, policy, step, max_trajectory_length):
         trajectories.append(trajectory)
 
     return trajectories
-
-
-def robust_svm_fit(X, y):
-    """Fit an SVM hyperplane robustly
-
-    After fitting, the hyperplane can be visualised (in 2D) by plotting the
-    line y = mx * c where m = -w[0] / w[1] and c = -b / w[1].
-
-    Args:
-        X (numpy array): A 2D array of SVM sample points. First dimension is
-            number of samples, second dimension is dimensionality of each
-            sample. In our case, each sample is a feature vector.
-        y (numy array): Vector of sample labels (in our case 1 is expert
-            policy, -1 is non-expert policy)
-    
-    Returns:
-        w (numpy array): Weight vector for the discovered hyperplane
-        b (float): Bias for the hyperplane
-    """
-
-    m = x.shape[0]
-    n = x.shape[1]
-
-    X = matrix(X)
-    labels = matrix(y)
-    gamma = 1
-
-    P = [matrix(np.eye(n))]
-    e = matrix(np.array([0] * m))
-
-    w, b, u, v, iterations = robsvm(X, labels, gamma, P, e)
-
-    return w, b
 
 
 def projection(

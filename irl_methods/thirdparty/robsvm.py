@@ -8,7 +8,42 @@ Vandenberghe.
 """
 
 
-from cvxopt import spmatrix, matrix, sparse, normal, mul, div, solvers, lapack, blas, base, misc, sqrt
+from cvxopt import spmatrix, matrix, sparse, normal, mul, div, solvers, \
+    lapack, blas, base, misc, sqrt
+
+
+def robust_svm_fit(X, y):
+    """Fit an SVM hyperplane robustly
+
+    After fitting, the hyperplane can be visualised (in 2D) by plotting the
+    line y = mx * c where m = -w[0] / w[1] and c = -b / w[1]. This method is
+    a convenience wrapper for robsvm, above.
+
+    Args:
+        X (numpy array): A 2D array of SVM sample points. First dimension is
+            number of samples, second dimension is dimensionality of each
+            sample. In our case, each sample is a feature vector.
+        y (numy array): Vector of sample labels (in our case 1 is expert
+            policy, -1 is non-expert policy)
+    
+    Returns:
+        w (numpy array): Weight vector for the discovered hyperplane
+        b (float): Bias for the hyperplane
+    """
+
+    m = x.shape[0]
+    n = x.shape[1]
+
+    X = matrix(X)
+    labels = matrix(y)
+    gamma = 1
+
+    P = [matrix(np.eye(n))]
+    e = matrix(np.array([0] * m))
+
+    w, b, u, v, iterations = robsvm(X, labels, gamma, P, e)
+
+    return w, b
 
 
 def robsvm(X, d, gamma, P, e):
@@ -339,3 +374,4 @@ def robsvm(X, d, gamma, P, e):
     # solve cone QP and return solution
     sol = solvers.coneqp(Q, q, G, h, dims = {'l':2*m,'q':[n+1 for i in range(k)],'s':[]}, kktsolver = F)
     return sol['x'][:n], sol['x'][n+k], sol['x'][n:n+k], sol['x'][n+k+1:], sol['iterations']
+
