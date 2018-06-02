@@ -8,6 +8,6 @@ setup(name='irl_methods',
       author='Aaron Snoswell',
       author_email='aaron.snoswell@uqconnect.edu.au',
       license='MIT',
-      packages=['irl_methods'],
+      packages=['irl_methods', 'irl_methods.utils', 'irl_methods.thirdparty'],
       install_requires=['numpy', 'cvxopt', 'gym'],
       zip_safe=False)

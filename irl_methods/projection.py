@@ -7,7 +7,7 @@ Copyright 2018 Aaron Snoswell
 import math
 import numpy as np
 
-from thirdparty.robsvm import robust_svm_fit
+from .thirdparty import robust_svm_fit
 
 
 def find_mixing_weights(mu_e, mu_i):
