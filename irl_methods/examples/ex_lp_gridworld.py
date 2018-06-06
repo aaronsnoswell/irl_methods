@@ -9,7 +9,7 @@ import sys
 from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
-from lp import lp
+from linear_programming import linear_programming
 from gridworld import GridWorldEnv
 
 import matplotlib.pyplot as plt
@@ -71,14 +71,14 @@ def main():
         elif ai == 1:
 
             l1 = 0
-            reward, _ = lp(T, gamma, l1=l1, verbose=True)
+            reward, _ = linear_programming(T, gamma, l1=l1, verbose=True)
             gw.plot_reward(reward)
             plt.title(r"IRL Result - $\lambda$={}".format(l1), fontsize=font_size)
 
         elif ai == 2:
 
             l1 = 1.05
-            reward, _ = lp(T, gamma, l1=l1, verbose=True)
+            reward, _ = linear_programming(T, gamma, l1=l1, verbose=True)
             gw.plot_reward(reward)
             plt.title(r"IRL Result - $\lambda$={}".format(l1), fontsize=font_size)
 
