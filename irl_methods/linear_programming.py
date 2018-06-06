@@ -22,6 +22,9 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     <https://www.inf.ed.ac.uk/teaching/courses/rl/slides17/8_IRL.pdf> for an
     accessible overview.
 
+    TODO: Adjust L1 norm constraint generation to allow negative rewards in
+    the final vector.
+
     Args:
         T (numpy array): A sorted transition matrix T[s, a, s']
             encoding a stationary deterministic policy. The structure must be
@@ -40,16 +43,6 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
         A tuple containing;
             - The reward vector for which the given policy is optimal, and
             - A result object from the LP optimiser
-
-    TODO: Adjust L1 norm constraint generation to allow negative rewards in
-    the final vector.
-
-    NB: Under If using Numpy with OpenBLAS 0.2.20 on Windows, there is a bug
-    that causes a deadlock with `np.linalg.inv()` for matrices larger than
-    24x24. A solution is to run OpenBLAS in single-threaded mode
-    (`set OPENBLAS_NUM_THREADS=1`) before executing this function. See 
-    <https://github.com/numpy/numpy/issues/11041#issuecomment-386521546> for
-    more information.
     """
 
     # Measure size of state and action sets
