@@ -39,7 +39,7 @@ Documentation coming. For now check the docstrings in the individual modules.
 ### Linear Programming IRL by [Ng and Russell, 2000](http://ai.stanford.edu/~ang/papers/icml00-irl.pdf).
 
  * [x] Planned
- * [x] Implemented
+ * [x] [Implemented](linear_programming.py)
  * [x] Tested
  * [ ] Examples written
 
