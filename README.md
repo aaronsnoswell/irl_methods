@@ -85,7 +85,7 @@ Documentation coming. For now check the docstrings in the individual modules.
  * [ ] Tested
  * [ ] Examples written
 
-### Deep Maximum entropy IRL by [Wulfmeier, Ondrùška and Posner, 2016](https://arxiv.org/abs/1507.04888)
+### Deep Maximum entropy IRL by [Wulfmeier, Ondrùška and Posner, 2016](https://arxiv.org/pdf/1507.04888.pdf)
 
  * [x] [Planned](/irl_methods/deep_maximum_entropy.py)
  * [ ] Implemented
