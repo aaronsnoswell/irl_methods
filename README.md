@@ -3,6 +3,9 @@
 High-quality reference implementations of various algorithms for Inverse
 Reinforcement Learning.
 
+This code is designed as a learning and research aid. It is not recommended
+(or tested) for prodcution usage.
+
 (c) 2018 Aaron Snoswell
 
 ## Requirements
@@ -10,9 +13,9 @@ Reinforcement Learning.
 Tested and developed with Python 3.5.5 on Windows. Requirements are handled
 by [setup.py](/setup.py), but currently include
 
- * [Numpy](http://www.numpy.org/)
- * [Cvxopt](http://cvxopt.org/)
- * [OpenAI gym](https://github.com/openai/gym)
+ * [numpy](http://www.numpy.org/)
+ * [cvxopt](http://cvxopt.org/)
+ * [openAI gym](https://github.com/openai/gym)
 
 ## Installation
 
