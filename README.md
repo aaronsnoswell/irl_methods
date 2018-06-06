@@ -36,4 +36,12 @@ Documentation coming. For now check the docstrings in the individual modules.
 
 ## Status
 
+### Linear Programming IRL
+
+[Ng and Russell, 2000](http://ai.stanford.edu/~ang/papers/icml00-irl.pdf).
+
+ * [x] Planned
+ * [x] Implemented
+ * [x] Tested
+ * [ ] Examples written
 
