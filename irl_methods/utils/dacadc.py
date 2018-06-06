@@ -27,7 +27,7 @@ def adc(vec, low_bounds, high_bounds, size):
 
     assert len(vec) == len(low_bounds) == len(high_bounds) == len(size), \
         "Vectors are not correct shape"
-
+    
 
     def _adc(val, min_val, max_val, steps):
         """Analog to digital level conversion
