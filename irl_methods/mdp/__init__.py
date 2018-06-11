@@ -10,5 +10,5 @@ Copyright 2018 Aaron Snoswell
 from .gridworld import GridWorldDiscEnv, GridWorldCtsEnv
 
 __all__ = [
-    "GridWorldDiscEnv", "GridWorldCtsEnv"
+    "gridworld"
 ]
