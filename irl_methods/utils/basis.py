@@ -15,7 +15,7 @@ def gaussian(mu, sigma):
     
     Args:
         mu (numpy array): Mean of the gaussian in N-D space
-        sigma (numpy array): Covariance matrix
+        sigma (numpy array): N x N Covariance matrix
     
     Returns:
         (float): A function f(x) that returns the value of the gaussian
@@ -49,7 +49,7 @@ def indicator(position, size):
 
     Args:
         position (numpy array): Center of this indicator function in N-D space
-        size (numpy array): Size of this indicator fuciton's box in N-D space
+        size (numpy array): Size of this indicator function's box in N-D space
 
     Returns:
         (function): A function f(x) that returns 1 if x is within an
