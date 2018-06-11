@@ -399,6 +399,51 @@ class GridWorldDiscEnv(gym.Env):
             # Let super handle it
             super(GridWorldDiscEnv, self).render(mode=mode)
 
+    def get_state_features(self, *, s=None, feature_map="coordinate"):
+        """Returns a feature vector for the given state
+
+        Args:
+            s (int): State integer, or None to use the current state
+            feature_map (string): Feature map to use. One of "coordinate",
+                "identity", "other_distance" or "goal_distance".
+
+        Returns:
+            (numpy array): Feature vector for the given state
+        """
+
+        s = s or self.state
+
+        if feature_map == "coordinate":
+            # Features are (x, y) coordinate tuples
+            return np.array(self._s2xy(s))
+
+        elif feature_map == "identity":
+            # Features are zero arrays with a 1 indicating the location of
+            # the state
+            f = np.zeros(len(self._S))
+            f[s] = 1
+            return f
+
+        elif feature_map == "other_distance":
+            # Features are an array indicating the L0 / manhattan distance to
+            # each other state
+            f = np.zeros(len(self._S))
+            x0, y0 = self._s2xy(s)
+            for other_state in range(len(self._S)):
+                x, y = self._s2xy(other_state)
+                f[other_state] = abs(x0 - x) + abs(y0 - y)
+            return f
+
+        else:
+            # Features are an array indicating the L0 / manhattan distance to
+            # each goal
+            f = np.zeros(len(self._goal_states))
+            x0, y0 = self._s2xy(s)
+            for i, goal_state in enumerate(self._goal_states):
+                x, y = self._s2xy(goal_state)
+                f[i] = abs(x0 - x) + abs(y0 - y)
+            return f
+
     def order_transition_matrix(self, policy):
         """Computes a sorted transition matrix for the GridWorld MDP
 
@@ -804,6 +849,31 @@ class GridWorldCtsEnv(gym.Env):
             # Let super handle it
             super(GridWorldCtsEnv, self).render(mode=mode)
 
+    def get_state_features(self, *, s=None, feature_map="coordinate"):
+        """Returns a feature vector for the given state
+
+        Args:
+            s (numpy array): State as a numpy array, or None to use the
+                current state
+            feature_map (string): Feature map to use. One of "coordinate" or
+                "goal_distance".
+
+        Returns:
+            (numpy array): Feature vector for the given state
+        """
+
+        s = s or self.state
+
+        if feature_map == "coordinate":
+            # Features are (x, y) coordinate tuples
+            return np.array(s)
+
+        else:
+            # Feature is a value indicating the distance to the goal
+            return np.linalg.norm(
+                self._goal_space.low + self._goal_space.high - s
+            )
+
     def get_optimal_policy(self):
         """Returns an optimal policy function for this MDP
 
@@ -885,46 +955,54 @@ if __name__ == "__main__":
 
     # Exercise discrete gridworld
     print("Testing discrete GridWorld...")
-    gw = GridWorldDiscEnv()
-    policy = gw.get_optimal_policy()
+    gw_disc = GridWorldDiscEnv(per_step_reward=-1)
+    policy = gw_disc.get_optimal_policy()
 
-    t_ordered = gw.order_transition_matrix(policy)
+    t_ordered = gw_disc.order_transition_matrix(policy)
     print(t_ordered)
 
-    print(gw.render(mode="ansi"))
-    gw.render(mode="human")
+    print(gw_disc.render(mode="ansi"))
+    gw_disc.render(mode="human")
     reward = 0
     while True:
-        action = policy(gw.state)
-        print("Taking action {}".format(ACTION_STRINGS[action]))
-        s, r, done, status = gw.step(action)
+        action = policy(gw_disc.state)
+        print("Observed f={}, taking action a={}".format(
+            gw_disc.get_state_features(feature_map="coordinate"),
+            ACTION_STRINGS[action]
+        ))
+        s, r, done, status = gw_disc.step(action)
+        print("Got reward {}".format(r))
         reward += r
-        print(gw.render(mode="ansi"))
-        gw.render(mode="human")
+        print(gw_disc.render(mode="ansi"))
+        gw_disc.render(mode="human")
 
         if done:
             break
 
-    gw.close()
+        gw_disc.close()
     print("Done, total reward = {}".format(reward))
 
     # Exercise cts gridworld
     print("Testing continuous GridWorld...")
-    gw = GridWorldCtsEnv()
-    policy = gw.get_optimal_policy()
+    gw_cts = GridWorldCtsEnv(per_step_reward=-1)
+    policy = gw_cts.get_optimal_policy()
 
-    gw.render()
+    gw_cts.render()
     reward = 0
     while True:
-        action = policy(gw.state)
-        print("Taking action {}".format(ACTION_STRINGS[action]))
-        s, r, done, status = gw.step(action)
+        action = policy(gw_cts.state)
+        print("Observed f={}, taking action a={}".format(
+            gw_cts.get_state_features(),
+            ACTION_STRINGS[action]
+        ))
+        s, r, done, status = gw_cts.step(action)
+        print("Got reward {}".format(r))
         reward += r
-        gw.render()
+        gw_cts.render()
 
         if done:
             break
 
-    gw.close()
+    gw_cts.close()
     print("Done, total reward = {}".format(reward))
 
