@@ -13,6 +13,8 @@ import copy
 import numpy as np
 import gym
 from gym.utils import seeding
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 
 # Edge mode static enum
@@ -190,6 +192,9 @@ class GridWorldDiscEnv(gym.Env):
             for s in range(len(self._S))
         ])
 
+        # Check if we're done or not
+        self._done = lambda: self.state in self._goal_states
+
         # Reset the MDP
         self.np_random = None
         self.seed()
@@ -227,7 +232,7 @@ class GridWorldDiscEnv(gym.Env):
         )
 
         # Check if we're done or not
-        done = self.state in self._goal_states
+        done = self._done()
 
         # Compute reward
         reward = self._per_step_reward
@@ -397,13 +402,10 @@ class GridWorldDiscEnv(gym.Env):
             problem
 
             Args:
-                state (tuple): The current MDP state as an (x, y) tuple of
-                    float
+                state (tuple): The current MDP state integer
 
             Returns:
-                (int): One of GridWorldCtsEnv.[ACTION_NORTH],
-                    GridWorldCtsEnv.ACTION_EAST, GridWorldCtsEnv.ACTION_SOUTH,
-                    or GridWorldCtsEnv.ACTION_WEST
+                (int): One of the ACTION_* globals defined in this module
             """
 
             # Pick the nearest goal
@@ -502,7 +504,9 @@ class GridWorldCtsEnv(gym.Env):
     ):
         """Constructor for the GridWorld environment
 
-        This MDP uses an x-first, y-up coordinate system
+        NB: All methods and internal representations that work with GridWorld
+        coordinates use an (x, y) coordinate system where +x is to the right and
+        +y is up.
         """
 
         assert edge_mode == EDGE_MODE_WRAP \
@@ -561,6 +565,15 @@ class GridWorldCtsEnv(gym.Env):
         # Goal reward
         self._goal_reward = goal_reward
 
+        # Check if we're done or not
+        self._done = lambda: self._goal_space.contains(np.array(self.state))
+
+        # Members used for rendering
+        self._fig = None
+        self._ax = None
+        self._goal_patch = None
+        self._state_patch = None
+
         # Reset the MDP
         self.np_random = None
         self.seed()
@@ -597,50 +610,218 @@ class GridWorldCtsEnv(gym.Env):
         new_state += np.array(self._A[action]) * self._action_distance
 
         # Apply wind
-        new_state += np.random.uniform(low=-self._wind_range,
-                                       high=self._wind_range, size=2)
+        new_state += np.random.uniform(
+            low=-self._wind_range,
+            high=self._wind_range,
+            size=2
+        )
 
         # Apply boundary condition
-        if self._edge_mode == GridWorldCtsEnv.EDGE_MODE_WRAP:
+        if self._edge_mode == EDGE_MODE_WRAP:
             self.state = tuple(new_state % 1.0)
 
         else:
             self.state = tuple(map(lambda a: min(max(0, a), 1), new_state))
 
-        # Check if we're done or not
-        done = self._goal_space.contains(np.array(self.state))
+        # Check done-ness
+        done = self._done()
 
         # Compute reward
         reward = self._per_step_reward
         if done:
             reward += self._goal_reward
 
-            # As per the Gym.Env definition, return a (s, r, done, status) tuple
+        # As per the Gym.Env definition, return a (s, r, done, status) tuple
         return self.state, reward, done, {}
+
+    def close(self):
+        """Cleans up
+        """
+        if self._fig is not None:
+            # Close our plot window
+            plt.close(self._fig)
+
+        self._fig = None
+        self._ax = None
+        self._goal_patch = None
+        self._state_patch = None
 
     def render(self, mode='human'):
         """Render the environment
-
-        TODO ajs 29/Apr/18 Implement render functionality
         """
 
-        return None
+        if mode == "human":
+            # Render using a GUI
+
+            if self._fig is None:
+                self._fig = plt.figure()
+                self._ax = self._fig.gca()
+
+                # Render the goal patch
+                self._goal_patch = mpatches.Rectangle(
+                    self._goal_space.low,
+                    self._goal_space.high[0] - self._goal_space.low[0],
+                    self._goal_space.high[1] - self._goal_space.low[1],
+                    color="green",
+                    ec=None
+                )
+                self._ax.add_patch(self._goal_patch)
+
+                # Render the current position
+                self._state_patch = mpatches.Circle(
+                    self.state,
+                    0.025,
+                    color="blue",
+                    ec=None
+                )
+                self._ax.add_patch(self._state_patch)
+
+                self._ax.set_title("Continuous GridWorld")
+                self._ax.set_aspect(1)
+                self._ax.set_xlim([0, 1])
+                self._ax.set_ylim([0, 1])
+
+            else:
+                # We assume a stationary goal
+                self._state_patch.center = self.state
+                self._fig.canvas.draw()
+
+            # Show the rendered GridWorld
+            if self._done():
+                # Plot and block
+                plt.show()
+            else:
+                # Plot without blocking
+                # plt.show(
+                #     block=False
+                # )
+                plt.pause(0.25)
+
+            return None
+
+        else:
+            # Let super handle it
+            super(GridWorldCtsEnv, self).render(mode=mode)
+
+    def get_optimal_policy(self):
+        """Returns an optimal policy function for this MDP
+
+        Returns:
+            (function): An optimal policy p(s) -> a that maps states to
+                actions
+        """
+
+        # Compute goal location
+        goal_positions = [np.mean(
+            np.vstack(
+                (
+                    self._goal_space.low,
+                    self._goal_space.high
+                )
+            ),
+            axis=0
+        )]
+
+        # If we're in a wrapping gridworld, the nearest goal could outside the
+        # world bounds. Add virtual goals to help the policy account for this
+        if self._edge_mode == EDGE_MODE_WRAP:
+            goal_positions.append(
+                goal_positions[0] - (1, 1)
+            )
+            goal_positions.append(
+                goal_positions[0] - (1, 0)
+            )
+            goal_positions.append(
+                goal_positions[0] - (0, 1)
+            )
+
+        def policy(state):
+            """A simple expert policy to solve the continuous gridworld
+            problem
+
+            Args:
+                state (tuple): The current MDP state as an (x, y) tuple of
+                    float
+
+            Returns:
+                (int): One of the ACTION_* globals defined in this module
+            """
+
+            # Pick the nearest goal
+            nearest_goal = None
+
+            if len(goal_positions) == 1:
+                # We only have one goal to consider
+                nearest_goal = goal_positions[0]
+
+            else:
+                # Find the nearest goal - it could be behind us
+                smallest_distance = math.inf
+                for g in goal_positions:
+                    distance = np.linalg.norm(np.array(g) - state)
+                    if distance < smallest_distance:
+                        smallest_distance = distance
+                        nearest_goal = g
+
+            # Find the distance to the goal
+            dx, dy = np.array(nearest_goal) - state
+
+            if abs(dx) > abs(dy):
+                # We need to move horizontally more than vertically
+                return ACTION_EAST if dx > 0 \
+                    else ACTION_WEST
+
+            else:
+                # We need to move vertically more than horizontally
+                return ACTION_NORTH if dy > 0 \
+                    else ACTION_SOUTH
+
+        return policy
 
 
-a = GridWorldDiscEnv()
-policy = a.get_optimal_policy()
+if __name__ == "__main__":
+    # Simple example of how to use these classes
 
-t_ordered = a.order_transition_matrix(policy)
-print(t_ordered)
+    # Exercise discrete gridworld
+    print("Testing discrete GridWorld...")
+    gw = GridWorldDiscEnv()
+    policy = gw.get_optimal_policy()
 
-print(a.render(mode="ansi"))
-while True:
-    action = policy(a.state)
-    print("Taking action {}".format(ACTION_STRINGS[action]))
-    s, r, done, status = a.step(action)
-    print(a.render(mode="ansi"))
+    t_ordered = gw.order_transition_matrix(policy)
+    print(t_ordered)
 
-    if done:
-        break
+    print(gw.render(mode="ansi"))
+    reward = 0
+    while True:
+        action = policy(gw.state)
+        print("Taking action {}".format(ACTION_STRINGS[action]))
+        s, r, done, status = gw.step(action)
+        reward += r
+        print(gw.render(mode="ansi"))
 
-print("Done")
+        if done:
+            break
+
+    gw.close()
+    print("Done, total reward = {}".format(reward))
+
+    # Exercise cts gridworld
+    print("Testing continuous GridWorld...")
+    gw = GridWorldCtsEnv()
+    policy = gw.get_optimal_policy()
+
+    gw.render()
+    reward = 0
+    while True:
+        action = policy(gw.state)
+        print("Taking action {}".format(ACTION_STRINGS[action]))
+        s, r, done, status = gw.step(action)
+        reward += r
+        gw.render()
+
+        if done:
+            break
+
+    gw.close()
+    print("Done, total reward = {}".format(reward))
+
