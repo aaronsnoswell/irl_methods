@@ -39,9 +39,9 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
         verbose (bool): Print progress information
     
     Returns:
-        A tuple containing;
-            - The reward vector for which the given policy is optimal, and
-            - A result object from the LP optimiser
+        (numpy array): The reward vector for which the given policy is
+            optimal, and
+        (dict): A result object from the LP optimiser
     """
 
     # Measure size of state and action sets
@@ -678,4 +678,71 @@ def trajectory_linear_programming(
         # Loop
 
     return alpha, result
+
+
+if __name__ == "__main__":
+
+    # Demonstrate these methods on some gridworld problems
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.axes_grid1 import ImageGrid
+    from irl_methods.mdp import GridWorldDiscEnv, GridWorldCtsEnv
+
+    gw_disc = GridWorldDiscEnv(goal_states=[(3, 2)])
+    optimal_policy = gw_disc.get_optimal_policy()
+    sorted_transition_matrix = gw_disc.order_transition_matrix(optimal_policy)
+    discount_factor = 0.9
+    l1 = 0.1
+
+    # Run LP IRL
+    lp_reward, _ = linear_programming(
+        sorted_transition_matrix,
+        discount_factor,
+        l1=l1,
+        verbose=True
+    )
+
+    # Make a new figure
+    fig = plt.figure()
+    plt.set_cmap("viridis")
+    font_size = 11
+
+    grid = ImageGrid(
+        fig,
+        111,
+        nrows_ncols=(1, 3),
+        axes_pad=0.15,
+        share_all=True,
+        cbar_location="right",
+        cbar_mode="single",
+        cbar_size="7%",
+        cbar_pad=0.15,
+    )
+
+    for ai, ax in enumerate(grid):
+
+        plt.sca(ax)
+
+        if ai == 0:
+            gw_disc.plot_reward(ax, gw_disc._R, r_min=0, r_max=1)
+            plt.title("Ground Truth Reward", fontsize=font_size)
+
+        elif ai == 1:
+            # Plot provided policy
+            gw_disc.plot_policy(ax, optimal_policy)
+            plt.title("Provided policy", fontsize=font_size)
+
+        elif ai == 2:
+            # Plot recovered reward
+            gw_disc.plot_reward(ax, lp_reward, r_min=0, r_max=1)
+            plt.title(r"LP IRL Result - $\lambda=${}, $\gamma=${}".format(
+                l1,
+                discount_factor
+            ), fontsize=font_size)
+
+    # Add colorbar
+    plt.colorbar(cax=grid[0].cax)
+
+    plt.show()
+
+
 
