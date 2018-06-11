@@ -1,5 +1,5 @@
 """
-Utilities for transforming MDP problems
+Utilities for transforming MDPs
 
 (c) Aaron Snoswell 2018
 """

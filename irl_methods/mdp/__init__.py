@@ -1,0 +1,14 @@
+# -*- coding: utf-8 -*-
+"""__init__.py for the irl_methods.mdp module
+
+This submodule contains various benchmark MDP implementations and MDP solution
+methods
+
+Copyright 2018 Aaron Snoswell
+"""
+
+from .gridworld import GridWorldEnv, GridWorldCtsEnv
+
+__all__ = [
+    "GridWorldEnv", "GridWorldCtsEnv"
+]
