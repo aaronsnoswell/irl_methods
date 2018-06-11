@@ -12,11 +12,11 @@ from functools import partial
 
 def gaussian(mu, sigma):
     """N-D gaussian implementation
-    
+
     Args:
         mu (numpy array): Mean of the gaussian in N-D space
         sigma (numpy array): N x N Covariance matrix
-    
+
     Returns:
         (float): A function f(x) that returns the value of the gaussian
             evaluated at x
@@ -29,7 +29,7 @@ def gaussian(mu, sigma):
     if k == 1:
         return lambda x: \
             math.exp(-1 * (x - mu) ** 2 / (2 * sigma ** 2)) / \
-                math.sqrt(2 * math.pi * sigma ** 2)
+            math.sqrt(2 * math.pi * sigma ** 2)
 
     # Pre-compute inverse
     simga_inv = np.linalg.inv(sigma)
@@ -39,7 +39,8 @@ def gaussian(mu, sigma):
 
     # Internal gaussian implementation
     def _gaussian(mu, sigma_inv, normalizer, x):
-        return math.exp(-0.5 * np.matmul(np.matmul((x - mu), simga_inv), (x - mu))) * normalizer
+        return math.exp(-0.5 * np.matmul(np.matmul((x - mu), simga_inv),
+                                         (x - mu))) * normalizer
 
     return partial(_gaussian, mu, simga_inv, normalizer)
 
@@ -59,7 +60,7 @@ def indicator(position, size):
 
     # Internal indicator function implementation
     def _indicator(position, size, x):
-        return float(np.all(abs(position - x) < size/2))
+        return float(np.all(abs(position - x) < size / 2))
 
     return partial(_indicator, position, size)
 
