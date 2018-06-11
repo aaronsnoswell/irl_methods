@@ -104,5 +104,8 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# Ignore PyCharm project directory
+.idea/
+
 # Temporarily ignore the docs folder
 docs
