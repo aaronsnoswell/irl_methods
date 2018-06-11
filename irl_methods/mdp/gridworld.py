@@ -165,9 +165,6 @@ class GridWorldDiscEnv(gym.Env):
                         self._state_index(x + wind_dx, y + wind_dy)
                     ] += wind / len(self._A)
 
-        # Gym visualisation object                        
-        self.viewer = None
-
         # Gym action space object (index corresponds to entry in self._A list)
         self.action_space = gym.spaces.Discrete(len(self._A))
 
@@ -247,12 +244,55 @@ class GridWorldDiscEnv(gym.Env):
         # As per the Gym.Env definition, return a (s, r, done, status) tuple
         return self.state, reward, done, {}
 
-    def render(self, mode='human'):
+    def render(self, mode="human"):
         """
         Render the environment
-
-        TODO ajs 29/Apr/18 Implement viewer functionality
         """
+
+        assert mode in self.metadata["render.modes"], "Invalid render mode"
+
+        if mode == "ansi":
+            # Render the gridworld text at the console
+            # We draw goal states as '$', and the current state as '@'
+            # We also draw boundaries around the world as '#' if the edge mode
+            # is clamp, or '+' if the edge mode is wrap
+
+            ret = ""
+
+            edge_symbol = "#" if self._edge_mode == EDGE_MODE_CLAMP else "+"
+
+            # Add top boundary
+            ret += edge_symbol * (self._size + 2) + "\n"
+
+            # Iterate over grid
+            for y in range(self._size):
+
+                # Add left boundary
+                ret += edge_symbol
+
+                # Draw gridworld objects
+                for x in range(self._size):
+                    if (y, x) in self._goal_states:
+                        ret += "$"
+                    elif (y, x) == self.state:
+                        ret += "@"
+                    else:
+                        ret += " "
+
+                # Add right boundary
+                ret += edge_symbol
+
+                # Add newline
+                ret += "\n"
+
+            # Add bottom boundary
+            ret += edge_symbol * (self._size + 2)
+
+            return ret
+
+        else:
+            # Render using a GUI
+            pass
 
         return None
 
