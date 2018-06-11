@@ -1058,6 +1058,36 @@ class GridWorldCtsEnv(gym.Env):
             linewidth=0.25
         )
 
+    def plot_trajectories(self, ax, trajectories):
+        """Plots a collection of (s, a) trajectories
+
+        Args:
+            ax (matplotlib.axes.Axes): Axes to render to
+            trajectories (list): List of (s, a) trajectories
+        """
+
+        # Set up plot
+        self.configure_plot(ax)
+
+        # Loop over trajectories
+        for trajectory in trajectories:
+
+            # Extract just the states
+            state_trajectory = np.array([sa[0] for sa in trajectory])
+
+            # Determine if this trajectory was successful or not
+            success = self._goal_space.contains(state_trajectory[-1])
+            color = "b" if success else "r"
+            color += "-"
+
+            plt.plot(
+                state_trajectory[:, 0],
+                state_trajectory[:, 1],
+                color,
+                linewidth=0.2,
+                alpha=0.2
+            )
+
     def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
         """Returns a feature vector for the given state
 

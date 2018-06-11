@@ -723,9 +723,11 @@ if __name__ == "__main__":
     # show variance in the methods
     initial_state = ((goal_state / size) + 0.5) % 1.0 +\
         np.random.uniform(0, 0.25, 2)
+    step_size = np.random.uniform(0.001, 0.05)
+    wind_size = np.random.uniform(0.01, 0.1)
     gw_cts = GridWorldCtsEnv(
-        action_distance=np.random.uniform(0.001, 0.05),
-        wind_range=np.random.uniform(0.001, 0.1),
+        action_distance=step_size,
+        wind_range=wind_size,
         initial_state=initial_state,
         goal_range=[goal_state / size, goal_state / size + cell_size],
         per_step_reward=0,
@@ -780,7 +782,7 @@ if __name__ == "__main__":
 
     # Roll-out some expert trajectories
     num_trajectories = num_samples
-    max_trajectory_length = size * 3
+    max_trajectory_length = (0.5 / step_size) * 3
     trajectories = []
     for i in range(num_trajectories):
         trajectory, _ = rollout(
@@ -884,16 +886,7 @@ if __name__ == "__main__":
 
     # Plot provided trajectories
     plt.sca(grid[7])
-    gw_cts.configure_plot(grid[7])
-    for trajectory in trajectories:
-        state_trajectory = np.array([sa[0] for sa in trajectory])
-        plt.plot(
-            state_trajectory[:, 0],
-            state_trajectory[:, 1],
-            'b-',
-            linewidth=0.2,
-            alpha=0.2
-        )
+    gw_cts.plot_trajectories(grid[7], trajectories)
     plt.plot(initial_state[0], initial_state[1], 'b.')
     plt.title("Provided trajectories", fontsize=font_size)
     plt.xticks([])
