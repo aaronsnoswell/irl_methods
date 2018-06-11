@@ -782,7 +782,7 @@ if __name__ == "__main__":
 
     # Roll-out some expert trajectories
     num_trajectories = num_samples
-    max_trajectory_length = (0.5 / step_size) * 3
+    max_trajectory_length = (0.5 / step_size) * 2
     trajectories = []
     for i in range(num_trajectories):
         trajectory, _ = rollout(
