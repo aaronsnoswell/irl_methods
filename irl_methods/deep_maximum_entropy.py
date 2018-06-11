@@ -32,6 +32,7 @@ def deep_maximum_entropy(
 
 
     # Initialize weight vector
+    #theta = np.random.normal(shape=())
 
     # Number of model refinement iterations
     N = 1000
