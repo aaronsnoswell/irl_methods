@@ -1058,13 +1058,14 @@ class GridWorldCtsEnv(gym.Env):
             linewidth=0.25
         )
 
-    def plot_trajectories(self, ax, trajectories, *, alpha=0.2):
+    def plot_trajectories(self, ax, trajectories, *, line_width=0.4, alpha=0.3):
         """Plots a collection of (s, a) trajectories
 
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
             trajectories (list): List of (s, a) trajectories
 
+            line_width (float): Line width for trajectories
             alpha (float): Opacity for trajectories
         """
 
@@ -1076,6 +1077,7 @@ class GridWorldCtsEnv(gym.Env):
 
             # Extract just the states
             state_trajectory = [sa[0] for sa in trajectory]
+            action_trajectory = [sa[1] for sa in trajectory]
 
             # Determine if this trajectory was successful or not
             success = self._goal_space.contains(state_trajectory[-1])
@@ -1095,14 +1097,24 @@ class GridWorldCtsEnv(gym.Env):
                     # Get states
                     s0 = states[0]
                     s1 = states[1]
+                    action = action_trajectory[i]
+                    dx, dy = 0, 0
+                    if action == ACTION_NORTH:
+                        dy = self._action_distance
+                    elif action == ACTION_EAST:
+                        dx = self._action_distance
+                    elif action == ACTION_SOUTH:
+                        dy = -self._action_distance
+                    elif action == ACTION_WEST:
+                        dx = -self._action_distance
 
                     # Add current state to chunk
                     current_chunk.append(s0)
 
                     x0, y0 = s0
-                    delta = s1 - s0
+                    delta = s1 - (s0 + (dx, dy))
                     dist = np.linalg.norm(delta)
-                    if dist > self._action_distance + self._wind_range:
+                    if dist > 2 * self._wind_range:
                         # This step was longer than possible given the wind and
                         # step size settings - assume the trajectory went off
                         # the edge of the map and split the trajectory here
@@ -1160,7 +1172,7 @@ class GridWorldCtsEnv(gym.Env):
                     np.array(chunk)[:, 0],
                     np.array(chunk)[:, 1],
                     color,
-                    linewidth=0.2,
+                    linewidth=line_width,
                     alpha=alpha
                 )
 
