@@ -1061,9 +1061,6 @@ class GridWorldCtsEnv(gym.Env):
     def plot_trajectories(self, ax, trajectories):
         """Plots a collection of (s, a) trajectories
 
-        TODO ajs 11/Jun/2018 Support trajectories that go off a wrapping
-            state space
-
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
             trajectories (list): List of (s, a) trajectories
@@ -1076,20 +1073,96 @@ class GridWorldCtsEnv(gym.Env):
         for trajectory in trajectories:
 
             # Extract just the states
-            state_trajectory = np.array([sa[0] for sa in trajectory])
+            state_trajectory = [sa[0] for sa in trajectory]
 
             # Determine if this trajectory was successful or not
             success = self._goal_space.contains(state_trajectory[-1])
             color = "b" if success else "r"
             color += "-"
 
-            plt.plot(
-                state_trajectory[:, 0],
-                state_trajectory[:, 1],
-                color,
-                linewidth=0.2,
-                alpha=0.2
-            )
+            # Slice the trajectory up into chunks whenever it goes off the
+            # edge of a wrapping gridworld
+            chunks = []
+            if self._edge_mode == EDGEMODE_WRAP:
+
+                current_chunk = []
+
+                for i, states in enumerate(
+                        zip(state_trajectory[0:-1], state_trajectory[1:])
+                ):
+                    # Get states
+                    s0 = states[0]
+                    s1 = states[1]
+
+                    # Add current state to chunk
+                    current_chunk.append(s0)
+
+                    x0, y0 = s0
+                    delta = s1 - s0
+                    dist = np.linalg.norm(delta)
+                    if dist > self._action_distance + self._wind_range:
+                        # This step was longer than possible given the wind and
+                        # step size settings - assume the trajectory went off
+                        # the edge of the map and split the trajectory here
+
+                        if abs(delta[0]) > abs(delta[1]):
+                            if delta[0] < 0:
+                                # Trajectory went off right edge of map
+                                x1, y1 = s1 - (1, 0)
+                                grad = (y1 - y0) / (x1 - x0)
+                                y_intercept = y1 - grad * x1
+                                current_chunk.append(np.array((1, y_intercept)))
+                                chunks.append(current_chunk)
+                                current_chunk = [np.array((0, y_intercept))]
+                            else:
+                                # Trajectory went off left edge of map
+                                x1, y1 = s1 - (1, 0)
+                                grad = (y1 - y0) / (x1 - x0)
+                                y_intercept = y1 - grad * x1
+                                current_chunk.append(np.array((0, y_intercept)))
+                                chunks.append(current_chunk)
+                                current_chunk = [np.array((1, y_intercept))]
+                        else:
+                            if delta[1] > 0:
+                                # Trajectory went off bottom of map
+                                x1, y1 = s1 - (0, 1)
+                                x_intercept = x0
+                                if x1 - x0 != 0:
+                                    grad = (y1 - y0) / (x1 - x0)
+                                    x_intercept = x1 - y1 / grad
+                                current_chunk.append(np.array((x_intercept, 0)))
+                                chunks.append(current_chunk)
+                                current_chunk = [np.array((x_intercept, 1))]
+                            else:
+                                # Trajectory went off top of map
+                                x1, y1 = s1 - (0, 1)
+                                x_intercept = x0
+                                if x1 - x0 != 0:
+                                    grad = (y1 - y0) / (x1 - x0)
+                                    x_intercept = x1 - y1 / grad
+                                current_chunk.append(np.array((x_intercept, 1)))
+                                chunks.append(current_chunk)
+                                current_chunk = [np.array((x_intercept, 0))]
+
+                # Add the final state and final chunk
+                current_chunk.append(state_trajectory[-1])
+                chunks.append(current_chunk)
+
+            else:
+
+                chunks.append(state_trajectory)
+
+            chunks = np.array(chunks)
+
+            # Draw all trajectory chunks
+            for chunk in chunks:
+                plt.plot(
+                    chunk[:, 0],
+                    chunk[:, 1],
+                    color,
+                    linewidth=0.2,
+                    alpha=0.2
+                )
 
     def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
         """Returns a feature vector for the given state
