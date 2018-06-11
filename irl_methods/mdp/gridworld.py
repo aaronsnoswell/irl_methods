@@ -1058,12 +1058,14 @@ class GridWorldCtsEnv(gym.Env):
             linewidth=0.25
         )
 
-    def plot_trajectories(self, ax, trajectories):
+    def plot_trajectories(self, ax, trajectories, *, alpha=0.2):
         """Plots a collection of (s, a) trajectories
 
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
             trajectories (list): List of (s, a) trajectories
+
+            alpha (float): Opacity for trajectories
         """
 
         # Set up plot
@@ -1152,16 +1154,14 @@ class GridWorldCtsEnv(gym.Env):
 
                 chunks.append(state_trajectory)
 
-            chunks = np.array(chunks)
-
             # Draw all trajectory chunks
             for chunk in chunks:
                 plt.plot(
-                    chunk[:, 0],
-                    chunk[:, 1],
+                    np.array(chunk)[:, 0],
+                    np.array(chunk)[:, 1],
                     color,
                     linewidth=0.2,
-                    alpha=0.2
+                    alpha=alpha
                 )
 
     def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
@@ -1330,6 +1330,34 @@ class GridWorldCtsEnv(gym.Env):
 
 def demo():
     # Simple example of how to use these classes
+
+    gw_cts = GridWorldCtsEnv(edge_mode=EDGEMODE_WRAP)
+
+    trajs = [
+        [
+            (np.array((0.3, 0.95)), None),
+            (np.array((0.4, 0.05)), None),
+        ],
+        [
+            (np.array((0.5, 0.05)), None),
+            (np.array((0.6, 0.95)), None),
+        ],
+        [
+            (np.array((0.95, 0.3)), None),
+            (np.array((0.05, 0.4)), None),
+        ],
+        [
+            (np.array((0.05, 0.5)), None),
+            (np.array((0.95, 0.6)), None),
+        ],
+    ]
+
+    fig = plt.figure()
+    ax = fig.gca()
+    gw_cts.plot_trajectories(ax, trajs, alpha=1)
+    plt.show()
+
+    return
 
     # Exercise discrete gridworld
     print("Testing discrete GridWorld...")
