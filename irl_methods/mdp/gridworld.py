@@ -1061,6 +1061,9 @@ class GridWorldCtsEnv(gym.Env):
     def plot_trajectories(self, ax, trajectories):
         """Plots a collection of (s, a) trajectories
 
+        TODO ajs 11/Jun/2018 Support trajectories that go off a wrapping
+            state space
+
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
             trajectories (list): List of (s, a) trajectories
