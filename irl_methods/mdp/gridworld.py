@@ -389,6 +389,7 @@ class GridWorldDiscEnv(gym.Env):
                     cell_size,
                     cell_size,
                     color="green",
+                    alpha=0.5,
                     ec=None
                 )
                 ax.add_patch(goal_patch)
@@ -952,6 +953,7 @@ class GridWorldCtsEnv(gym.Env):
                 self._goal_space.high[0] - self._goal_space.low[0],
                 self._goal_space.high[1] - self._goal_space.low[1],
                 color="green",
+                alpha=0.5,
                 ec=None
             )
             ax.add_patch(goal_patch)
@@ -967,7 +969,9 @@ class GridWorldCtsEnv(gym.Env):
         # Configure axes
         ax.set_aspect(1, adjustable="box")
         ax.set_xlim([0, 1])
+        ax.xaxis.set_tick_params(size=0)
         ax.set_ylim([0, 1])
+        ax.yaxis.set_tick_params(size=0)
 
     def plot_reward(self, ax, reward_fn, r_min, r_max, *, resolution=10):
         """Rasters a given reward function

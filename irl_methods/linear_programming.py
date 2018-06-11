@@ -778,7 +778,8 @@ if __name__ == "__main__":
         111,
         nrows_ncols=(3, 3),
         axes_pad=0.3,
-        share_all=True,
+        share_all=False,
+        label_mode="L",
         cbar_location="right",
         cbar_mode="single",
         cbar_size="5%",
@@ -791,6 +792,7 @@ if __name__ == "__main__":
     plt.sca(grid[0])
     gw_disc.plot_reward(grid[0], gw_disc.ground_truth_reward, r_min=0, r_max=1)
     plt.title("Ground truth reward", fontsize=font_size)
+    plt.yticks([])
 
     # Plot provided policy
     plt.sca(grid[1])
@@ -814,6 +816,7 @@ if __name__ == "__main__":
         resolution=size
     )
     plt.title("Ground truth reward", fontsize=font_size)
+    plt.yticks([])
 
     # Plot provided policy and state sample
     plt.sca(grid[4])
@@ -837,7 +840,7 @@ if __name__ == "__main__":
         cts_reward,
         0,
         1,
-        resolution=size
+        resolution=100
     )
     plt.title("LLP IRL result", fontsize=font_size)
 
@@ -853,19 +856,24 @@ if __name__ == "__main__":
         resolution=size
     )
     plt.title("Ground truth reward", fontsize=font_size)
+    plt.xticks([])
+    plt.yticks([])
 
     # Plot provided trajectories
     plt.sca(grid[7])
     #gw_cts.plot_policy(grid[7], cts_optimal_policy)
     plt.title("Provided trajectories", fontsize=font_size)
+    plt.xticks([])
 
     # Plot recovered reward
     plt.sca(grid[8])
     #gw_cts.plot_policy(grid[8], cts_optimal_policy)
     plt.title("TLP IRL result", fontsize=font_size)
+    plt.xticks([])
 
     # Add colorbar
     plt.sca(grid[0])
+    plt.yticks([])
     plt.colorbar(cax=grid[0].cax)
 
     plt.show()
