@@ -42,4 +42,7 @@ def rollout(mdp, start_state, policy, *, max_length=math.inf):
         if done or len(trajectory) > max_length:
             break
 
+    # Add final action
+    trajectory.append((state, None))
+
     return trajectory, rewards
