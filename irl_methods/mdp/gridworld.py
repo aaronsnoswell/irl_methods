@@ -1058,7 +1058,7 @@ class GridWorldCtsEnv(gym.Env):
             linewidth=0.25
         )
 
-    def plot_trajectories(self, ax, trajectories, *, line_width=0.4, alpha=0.3):
+    def plot_trajectories(self, ax, trajectories, *, line_width=0.2, alpha=0.2):
         """Plots a collection of (s, a) trajectories
 
         Args:
@@ -1068,6 +1068,9 @@ class GridWorldCtsEnv(gym.Env):
             line_width (float): Line width for trajectories
             alpha (float): Opacity for trajectories
         """
+
+        # Float comparison epsillon
+        eps = 1e-6
 
         # Set up plot
         self.configure_plot(ax)
@@ -1114,49 +1117,52 @@ class GridWorldCtsEnv(gym.Env):
                     x0, y0 = s0
                     delta = s1 - (s0 + (dx, dy))
                     dist = np.linalg.norm(delta)
-                    if dist > 2 * self._wind_range:
+                    if dist > 2 * self._wind_range + eps:
                         # This step was longer than possible given the wind and
                         # step size settings - assume the trajectory went off
                         # the edge of the map and split the trajectory here
 
-                        if abs(delta[0]) > abs(delta[1]):
-                            if delta[0] < 0:
-                                # Trajectory went off right edge of map
-                                x1, y1 = s1 - (1, 0)
-                                grad = (y1 - y0) / (x1 - x0)
-                                y_intercept = y1 - grad * x1
-                                current_chunk.append(np.array((1, y_intercept)))
-                                chunks.append(current_chunk)
-                                current_chunk = [np.array((0, y_intercept))]
-                            else:
-                                # Trajectory went off left edge of map
-                                x1, y1 = s1 - (1, 0)
-                                grad = (y1 - y0) / (x1 - x0)
-                                y_intercept = y1 - grad * x1
-                                current_chunk.append(np.array((0, y_intercept)))
-                                chunks.append(current_chunk)
-                                current_chunk = [np.array((1, y_intercept))]
-                        else:
-                            if delta[1] > 0:
-                                # Trajectory went off bottom of map
-                                x1, y1 = s1 - (0, 1)
-                                x_intercept = x0
-                                if x1 - x0 != 0:
-                                    grad = (y1 - y0) / (x1 - x0)
-                                    x_intercept = x1 - y1 / grad
-                                current_chunk.append(np.array((x_intercept, 0)))
-                                chunks.append(current_chunk)
-                                current_chunk = [np.array((x_intercept, 1))]
-                            else:
-                                # Trajectory went off top of map
-                                x1, y1 = s1 - (0, 1)
-                                x_intercept = x0
-                                if x1 - x0 != 0:
-                                    grad = (y1 - y0) / (x1 - x0)
-                                    x_intercept = x1 - y1 / grad
-                                current_chunk.append(np.array((x_intercept, 1)))
-                                chunks.append(current_chunk)
-                                current_chunk = [np.array((x_intercept, 0))]
+                        chunks.append(current_chunk)
+                        current_chunk = []
+
+                        # if abs(delta[0]) > abs(delta[1]):
+                        #     if delta[0] < 0:
+                        #         # Trajectory went off right edge of map
+                        #         x1, y1 = s1 - (1, 0)
+                        #         grad = (y1 - y0) / (x1 - x0)
+                        #         y_intercept = y1 - grad * x1
+                        #         current_chunk.append(np.array((1, y_intercept)))
+                        #         chunks.append(current_chunk)
+                        #         current_chunk = [np.array((0, y_intercept))]
+                        #     else:
+                        #         # Trajectory went off left edge of map
+                        #         x1, y1 = s1 - (1, 0)
+                        #         grad = (y1 - y0) / (x1 - x0)
+                        #         y_intercept = y1 - grad * x1
+                        #         current_chunk.append(np.array((0, y_intercept)))
+                        #         chunks.append(current_chunk)
+                        #         current_chunk = [np.array((1, y_intercept))]
+                        # else:
+                        #     if delta[1] > 0:
+                        #         # Trajectory went off bottom of map
+                        #         x1, y1 = s1 - (0, 1)
+                        #         x_intercept = x0
+                        #         if x1 - x0 != 0:
+                        #             grad = (y1 - y0) / (x1 - x0)
+                        #             x_intercept = x1 - y1 / grad
+                        #         current_chunk.append(np.array((x_intercept, 0)))
+                        #         chunks.append(current_chunk)
+                        #         current_chunk = [np.array((x_intercept, 1))]
+                        #     else:
+                        #         # Trajectory went off top of map
+                        #         x1, y1 = s1 - (0, 1)
+                        #         x_intercept = x0
+                        #         if x1 - x0 != 0:
+                        #             grad = (y1 - y0) / (x1 - x0)
+                        #             x_intercept = x1 - y1 / grad
+                        #         current_chunk.append(np.array((x_intercept, 1)))
+                        #         chunks.append(current_chunk)
+                        #         current_chunk = [np.array((x_intercept, 0))]
 
                 # Add the final state and final chunk
                 current_chunk.append(state_trajectory[-1])
