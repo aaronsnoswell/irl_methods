@@ -8,14 +8,31 @@ by Ng and Russell, 2000
 Copyright 2018 Aaron Snoswell
 """
 
-
+import math
 import copy
 import numpy as np
 import gym
 from gym.utils import seeding
 
 
-class GridWorldEnv(gym.Env):
+# Edge mode static enum
+EDGE_MODE_CLAMP = 0
+EDGE_MODE_WRAP = 1
+
+# Syntax sugar helpers for actions
+ACTION_NORTH = 0
+ACTION_EAST = 1
+ACTION_SOUTH = 2
+ACTION_WEST = 3
+ACTION_STRINGS = [
+    "North",
+    "East",
+    "South",
+    "West"
+]
+
+
+class GridWorldDiscEnv(gym.Env):
     """A simple GridWorld MDP
 
     Based on the GridWorld described in 'Algorithms for Inverse Reinforcement
@@ -26,23 +43,6 @@ class GridWorldEnv(gym.Env):
         'render.modes': ['human', 'ansi']
     }
 
-    # Edge mode static enum
-    EDGE_MODE_CLAMP = 0
-    EDGE_MODE_WRAP = 1
-    
-    # Syntax sugar helpers for actions
-    ACTION_NORTH = 0
-    ACTION_EAST = 1
-    ACTION_SOUTH = 2
-    ACTION_WEST = 3
-
-    ACTION_STRINGS = [
-        "North",
-        "East",
-        "South",
-        "West"
-    ]
-
     def __init__(
         self,
         *,
@@ -50,7 +50,7 @@ class GridWorldEnv(gym.Env):
         wind=0.3,
         edge_mode=EDGE_MODE_CLAMP,
         initial_state=(4, 0),
-        goal_states=None,
+        goal_states=((0, 4),),
         per_step_reward=0,
         goal_reward=1
     ):
@@ -66,18 +66,14 @@ class GridWorldEnv(gym.Env):
         @param edge_mode - Edge of world behaviour, one of
             GridWorldEnv.EDGE_MODE_CLAMP or GridWorldEnv.EDGE_MODE_WRAP
         @param initial_state - Starting state for the agent
-        @param goal_states - List of tuples of goal states (defaults to
-            [(0, 4)])
+        @param goal_states - List of tuples of goal states
         @param per_step_reward - Reward given every step
         @param goal_reward - Reward upon reaching the goal
         """
 
-        assert edge_mode == GridWorldEnv.EDGE_MODE_WRAP \
-            or edge_mode == GridWorldEnv.EDGE_MODE_CLAMP, \
+        assert edge_mode == EDGE_MODE_WRAP \
+            or edge_mode == EDGE_MODE_CLAMP, \
             "Invalid edge_mode: {}".format(edge_mode)
-
-        # Set default value for parameter goal_states
-        goal_states = goal_states or [(0, 4)]
         
         # Size of the gridworld
         self._size = size
@@ -98,10 +94,10 @@ class GridWorldEnv(gym.Env):
         # Lambda to apply boundary condition to an x, y state
         self._apply_edge_mode = lambda x, y: (
                 min(max(x, 0), self._size - 1) if
-                (self._edge_mode == GridWorldEnv.EDGE_MODE_CLAMP)
+                (self._edge_mode == EDGE_MODE_CLAMP)
                 else x % size,
                 min(max(y, 0), self._size - 1) if
-                (self._edge_mode == GridWorldEnv.EDGE_MODE_CLAMP)
+                (self._edge_mode == EDGE_MODE_CLAMP)
                 else y % size,
             )
 
@@ -194,10 +190,10 @@ class GridWorldEnv(gym.Env):
 
         # Store true reward
         self._R = np.array([
-            self._per_step_reward + self._goal_reward \
-                if (y, x) in self._goal_states \
-                    else self._per_step_reward \
-                        for y in range(self._size) for x in range(self._size)
+            self._per_step_reward + self._goal_reward
+            if (y, x) in self._goal_states
+            else self._per_step_reward
+            for y in range(self._size) for x in range(self._size)
         ])
 
         # Reset the MDP
@@ -209,9 +205,18 @@ class GridWorldEnv(gym.Env):
         """
         Set the random seed for the environment
         """
-        
+
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
+
+    def reset(self):
+        """
+        Reset the environment to it's initial state
+        """
+
+        self.state = self._initial_state
+
+        return self.state
 
     def step(self, action):
         """
@@ -242,15 +247,6 @@ class GridWorldEnv(gym.Env):
         # As per the Gym.Env definition, return a (s, r, done, status) tuple
         return self.state, reward, done, {}
 
-    def reset(self):
-        """
-        Reset the environment to it's initial state
-        """
-
-        self.state = self._initial_state
-        
-        return self.state
-
     def render(self, mode='human'):
         """
         Render the environment
@@ -259,14 +255,6 @@ class GridWorldEnv(gym.Env):
         """
 
         return None
-
-    def close(self):
-        """
-        Close the environment
-        """
-
-        if self.viewer:
-            self.viewer.close()
 
     def order_transition_matrix(self, policy):
         """Computes a sorted transition matrix for the GridWorld MDP
@@ -365,22 +353,9 @@ class GridWorldCtsEnv(gym.Env):
     Learning' by Ng and Russell, 2000
     """
 
-    # Edge mode static enum
-    EDGE_MODE_CLAMP = 0
-    EDGE_MODE_WRAP = 1
-
-    # Sytax sugar helpers for actions
-    ACTION_NORTH = 0
-    ACTION_EAST = 1
-    ACTION_SOUTH = 2
-    ACTION_WEST = 3
-
-    ACTION_STRINGS = [
-        "North",
-        "East",
-        "South",
-        "West"
-    ]
+    metadata = {
+        'render.modes': ['human']
+    }
 
     def __init__(
             self,
@@ -398,8 +373,8 @@ class GridWorldCtsEnv(gym.Env):
         This MDP uses an x-first, y-up coordinate system
         """
 
-        assert edge_mode == GridWorldCtsEnv.EDGE_MODE_WRAP \
-               or edge_mode == GridWorldCtsEnv.EDGE_MODE_CLAMP, \
+        assert edge_mode == EDGE_MODE_WRAP \
+            or edge_mode == EDGE_MODE_CLAMP, \
             "Invalid edge_mode: {}".format(edge_mode)
 
         # How far one step takes the agent
@@ -426,9 +401,6 @@ class GridWorldCtsEnv(gym.Env):
             (-1, 0),
 
         ]
-
-        # Gym visualisation object
-        self.viewer = None
 
         # Gym action space object (index corresponds to entry in self._A list)
         self.action_space = gym.spaces.Discrete(len(self._A))
@@ -458,16 +430,26 @@ class GridWorldCtsEnv(gym.Env):
         self._goal_reward = goal_reward
 
         # Reset the MDP
+        self.np_random = None
         self.seed()
         self.reset()
 
     def seed(self, seed=None):
-        """Set the random seed for the environment
+        """
+        Set the random seed for the environment
         """
 
         self.np_random, seed = seeding.np_random(seed)
-
         return [seed]
+
+    def reset(self):
+        """
+        Reset the environment to it's initial state
+        """
+
+        self.state = self._initial_state
+
+        return self.state
 
     def step(self, action):
         """Take one step in the environment
@@ -504,39 +486,13 @@ class GridWorldCtsEnv(gym.Env):
             # As per the Gym.Env definition, return a (s, r, done, status) tuple
         return self.state, reward, done, {}
 
-    def reset(self):
-        """Reset the environment to it's initial state
-        """
-
-        self.state = self._initial_state
-
-        return self.state
-
     def render(self, mode='human'):
         """Render the environment
 
         TODO ajs 29/Apr/18 Implement viewer functionality
         """
 
-        """
-        screen_width = 600
-        screen_height = 400
-
-        if self.viewer is None:
-            from gym.envs.classic_control import rendering
-            self.viewer = rendering.Viewer(screen_width, screen_height)
-
-        return self.viewer.render(return_rgb_array = (mode == 'rgb_array'))
-        """
-
         return None
-
-    def close(self):
-        """Close the environment
-        """
-
-        if self.viewer:
-            self.viewer.close()
 
     def get_optimal_policy(self):
         """Returns an optimal policy function for this MDP
@@ -605,12 +561,12 @@ class GridWorldCtsEnv(gym.Env):
 
             if abs(dx) > abs(dy):
                 # We need to move horizontally more than vertically
-                return GridWorldCtsEnv.ACTION_EAST if dx > 0 \
-                    else GridWorldCtsEnv.ACTION_WEST
+                return ACTION_EAST if dx > 0 \
+                    else ACTION_WEST
 
             else:
                 # We need to move vertically more than horizontally
-                return GridWorldCtsEnv.ACTION_NORTH if dy > 0 \
-                    else GridWorldCtsEnv.ACTION_SOUTH
+                return ACTION_NORTH if dy > 0 \
+                    else ACTION_SOUTH
 
         return policy

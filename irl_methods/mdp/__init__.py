@@ -7,8 +7,8 @@ methods
 Copyright 2018 Aaron Snoswell
 """
 
-from .gridworld import GridWorldEnv, GridWorldCtsEnv
+from .gridworld import GridWorldDiscEnv, GridWorldCtsEnv
 
 __all__ = [
-    "GridWorldEnv", "GridWorldCtsEnv"
+    "GridWorldDiscEnv", "GridWorldCtsEnv"
 ]
