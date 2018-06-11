@@ -120,8 +120,10 @@ class GridWorldDiscEnv(gym.Env):
 
         # Lambda to get the state index of an x, y pair
         self._xy2s = lambda x, y: \
-            self._apply_edge_mode(x, y)[1] * size + \
-            self._apply_edge_mode(x, y)[0]
+            math.floor(
+                self._apply_edge_mode(x, y)[1] * size +
+                self._apply_edge_mode(x, y)[0]
+            )
 
         # Lambda to convert a state to an x, y pair
         self._s2xy = lambda s: (s % self._size, s // self._size)
@@ -334,18 +336,8 @@ class GridWorldDiscEnv(gym.Env):
                 self._fig = plt.figure()
                 self._ax = self._fig.gca()
 
-                # Render the goal patch(es)
-                self._goal_patches = []
-                for g in self._goal_states:
-                    goal_patch = mpatches.Rectangle(
-                        s2coord(g) - (cell_size/2, cell_size/2),
-                        1,
-                        1,
-                        color="green",
-                        ec=None
-                    )
-                    self._goal_patches.append(goal_patch)
-                    self._ax.add_patch(goal_patch)
+                # Render common elements
+                self.configure_plot(self._ax)
 
                 # Render the current position
                 self._state_patch = mpatches.Circle(
@@ -355,49 +347,6 @@ class GridWorldDiscEnv(gym.Env):
                     ec=None
                 )
                 self._ax.add_patch(self._state_patch)
-
-                # Render a grid
-                line_width = 0.75
-                line_color = "#dddddd"
-                for i in [x / self._size for x in range(self._size)]:
-                    self._ax.add_artist(plt.Line2D(
-                        (0, 1),
-                        (i, i),
-                        color=line_color,
-                        linewidth=line_width
-                    ))
-                    self._ax.add_artist(plt.Line2D(
-                        (i, i),
-                        (0, 1),
-                        color=line_color,
-                        linewidth=line_width
-                    ))
-
-                self._ax.set_title(
-                    "Discrete {} GridWorld, wind = {}".format(
-                        EDGEMODE_STRINGS[self._edge_mode],
-                        self._wind
-                    )
-                )
-                self._ax.set_aspect(1)
-
-                self._ax.set_xlim([0, 1])
-                self._ax.set_xticks(
-                    [s / self._size + cell_size/2 for s in range(self._size)]
-                )
-                self._ax.set_xticklabels(
-                   [str(s + 1) for s in range(self._size)]
-                )
-
-                self._ax.set_ylim([0, 1])
-                self._ax.set_yticks(
-                    [s / self._size + cell_size/2 for s in range(self._size)]
-                )
-                self._ax.set_yticklabels(
-                   [str(s + 1) for s in range(self._size)]
-                )
-                self._ax.xaxis.set_tick_params(size=0)
-                self._ax.yaxis.set_tick_params(size=0)
 
             else:
                 # We assume a stationary goal
@@ -418,6 +367,167 @@ class GridWorldDiscEnv(gym.Env):
 
             # Let super handle it
             super(GridWorldDiscEnv, self).render(mode=mode)
+
+    def configure_plot(self, ax, *, line_color="#dddddd", render_goals=True):
+        """Helper method to configure matplotlib axes, draw common elements
+
+        Args:
+            ax (matplotlib.axes.Axes): Axes to render to
+            line_color (string): Line color
+            render_goals (bool): Draw patches to indicate the goal position(s)
+        """
+
+        cell_size = 1/self._size
+        s2coord = lambda s: np.array(self._s2xy(s)) / self._size + \
+                            (cell_size / 2, cell_size / 2)
+
+        # Render the goal patch(es)
+        if render_goals:
+            for g in self._goal_states:
+                goal_patch = mpatches.Rectangle(
+                    s2coord(g) - (cell_size/2, cell_size/2),
+                    cell_size,
+                    cell_size,
+                    color="green",
+                    ec=None
+                )
+                ax.add_patch(goal_patch)
+
+        # Render a grid
+        line_width = 0.75
+        for i in [x / self._size for x in range(self._size)]:
+            ax.add_artist(plt.Line2D(
+                (0, 1),
+                (i, i),
+                color=line_color,
+                linewidth=line_width
+            ))
+            ax.add_artist(plt.Line2D(
+                (i, i),
+                (0, 1),
+                color=line_color,
+                linewidth=line_width
+            ))
+
+        # Set title
+        ax.set_title(
+            "Discrete {} GridWorld, wind = {}".format(
+                EDGEMODE_STRINGS[self._edge_mode],
+                self._wind
+            )
+        )
+
+        # Set aspect
+        ax.set_aspect(1, adjustable="box")
+
+        # Configure x-axis
+        ax.set_xlim([0, 1])
+        ax.set_xticks(
+            [s / self._size + cell_size / 2 for s in range(self._size)]
+        )
+        ax.set_xticklabels(
+            [str(s + 1) for s in range(self._size)]
+        )
+        ax.xaxis.set_tick_params(size=0)
+
+        # Configure y-axis
+        ax.set_ylim([0, 1])
+        ax.set_yticks(
+            [s / self._size + cell_size / 2 for s in range(self._size)]
+        )
+        ax.set_yticklabels(
+            [str(s + 1) for s in range(self._size)]
+        )
+        ax.yaxis.set_tick_params(size=0)
+
+    def plot_reward(self, ax, rewards, *, r_min=None, r_max=None):
+        """Plots a given reward vector
+
+        Args:
+            ax (matplotlib.axes.Axes): Axes to render to
+            rewards (numpy array): Numpy array of rewards for each state index
+
+            r_min (float): Minimum reward - used for color map scaling. None to
+                infer from reward map.
+            r_max (float): Maximum reward - used for color map scaling. None to
+                infer from reward map.
+        """
+
+        r_min = -np.abs(rewards).max() if r_min is None else r_min
+        r_max = np.abs(rewards).max() if r_max is None else r_max
+
+        # Set up plot
+        self.configure_plot(ax, line_color="#666666", render_goals=False)
+
+        y, x = np.mgrid[0:self._size+1, 0:self._size+1] / self._size
+        z = np.reshape(rewards, (self._size, self._size))
+        plt.pcolormesh(
+            x,
+            y,
+            z,
+            vmin=r_min,
+            vmax=r_max
+        )
+
+    def plot_policy(self, ax, policy):
+        """Plots a given policy function
+
+        Args:
+            ax (matplotlib.axes.Axes): Axes to render to
+            policy (function): Policy p(s) -> a mapping state indices to actions
+        """
+
+        # Set up plot
+        self.configure_plot(ax)
+
+        # y, x = np.mgrid[0:self._size + 1, 0:self._size + 1] / self._size
+        # u = np.zeros(shape=(self._size, self._size))
+        # v = np.zeros(shape=(self._size, self._size))
+        #
+        # for state in range(len(self._S)):
+        #     x, y = self._s2xy(state)
+
+
+        cell_size = 1/self._size
+        X, Y = np.mgrid[0:self._size, 0:self._size] / self._size + (cell_size/2)
+
+        U = np.zeros(shape=X.shape)
+        V = np.zeros(shape=X.shape)
+
+        for x, y in list(zip(np.reshape(X, (-1,)), np.reshape(Y, (-1,)))):
+
+            # Convert to x, y coordinate
+            x_coord = math.floor(x * self._size)
+            y_coord = math.floor(y * self._size)
+
+            # Convert to state
+            state = self._xy2s(x_coord, y_coord)
+
+            # Get action from policy and convert to a delta
+            action = policy(state)
+            dx, dy = 0, 0
+            if action == ACTION_NORTH:
+                dy = 1
+            elif action == ACTION_EAST:
+                dx = 1
+            elif action == ACTION_SOUTH:
+                dy = -1
+            elif action == ACTION_WEST:
+                dx = -1
+
+            U[x_coord, y_coord] = dx
+            V[x_coord, y_coord] = dy
+
+        plt.quiver(
+            X,
+            Y,
+            U,
+            V,
+            pivot="mid",
+            edgecolor="black",
+            facecolor="white",
+            linewidth=0.25
+        )
 
     def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
         """Returns a feature vector for the given state
@@ -602,10 +712,10 @@ class GridWorldDiscEnv(gym.Env):
                 # the policy
                 if np.random.uniform() > 0.5:
                     # Move vertically
-                    direction = "vertically"
+                    direction = "horizontally"
                 else:
                     # Move horizontally
-                    direction = "horizontally"
+                    direction = "vertically"
 
             if abs(dx) > abs(dy):
                 # We need to move horizontally more than vertically
@@ -623,30 +733,6 @@ class GridWorldDiscEnv(gym.Env):
                     else ACTION_SOUTH
 
         return policy
-
-    def plot_reward(self, rewards):
-        """
-        Plots a given reward vector
-        """
-
-        import matplotlib.pyplot as plt
-
-        fig = plt.gcf()
-        ax = plt.gca()
-
-        line_color = "#efefef"
-
-        plt.pcolor(
-            np.reshape(rewards, (self._size, self._size)),
-            edgecolors=line_color
-        )
-        plt.gca().invert_yaxis()
-        
-        ax.set_aspect("equal", adjustable="box")
-        ax.tick_params(length=0, labelbottom=False, labelleft=False)
-
-        # Figure is now ready for display or saving
-        return fig
 
 
 class GridWorldCtsEnv(gym.Env):
@@ -1045,4 +1131,3 @@ if __name__ == "__main__":
 
     gw_cts.close()
     print("Done, total reward = {}".format(reward))
-
