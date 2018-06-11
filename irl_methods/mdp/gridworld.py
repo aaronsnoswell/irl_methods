@@ -1328,7 +1328,7 @@ class GridWorldCtsEnv(gym.Env):
         return _T
 
 
-if __name__ == "__main__":
+def demo():
     # Simple example of how to use these classes
 
     # Exercise discrete gridworld
@@ -1392,3 +1392,7 @@ if __name__ == "__main__":
 
     gw_cts.close()
     print("Done, total reward = {}".format(reward))
+
+
+if __name__ == "__main__":
+    demo()
