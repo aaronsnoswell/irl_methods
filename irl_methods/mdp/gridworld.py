@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Simple GridWorld MDP implementation
+Simple 2D GridWorld MDP implementation
 
 Based on the GridWorld from 'Algorithms for Inverse Reinforcement Learning'
 by Ng and Russell, 2000
@@ -22,12 +22,15 @@ class GridWorldEnv(gym.Env):
     Learning' by Ng and Russell, 2000
     """
 
+    metadata = {
+        'render.modes': ['human', 'ansi']
+    }
 
     # Edge mode static enum
     EDGE_MODE_CLAMP = 0
     EDGE_MODE_WRAP = 1
     
-    # Sytax sugar helpers for actions
+    # Syntax sugar helpers for actions
     ACTION_NORTH = 0
     ACTION_EAST = 1
     ACTION_SOUTH = 2
@@ -40,41 +43,44 @@ class GridWorldEnv(gym.Env):
         "West"
     ]
 
-
     def __init__(
         self,
         *,
-        N = 5,
-        wind = 0.3,
-        edge_mode = EDGE_MODE_CLAMP,
-        initial_state = (4, 0),
-        goal_states = [(0, 4)],
-        per_step_reward = 0,
-        goal_reward = 1
-        ):
+        size=5,
+        wind=0.3,
+        edge_mode=EDGE_MODE_CLAMP,
+        initial_state=(4, 0),
+        goal_states=None,
+        per_step_reward=0,
+        goal_reward=1
+    ):
         """
         Constructor for the GridWorld environment
 
         NB: All methods and internal representations use the y-first, y-down
-        coordinate system so that printing any numpy array matches the 
+        coordinate system
 
-        @param N - The size of the grid world
+        @param size - The size of the grid world
         @param wind - The chance of a uniform random action being taken each
             step
         @param edge_mode - Edge of world behaviour, one of
             GridWorldEnv.EDGE_MODE_CLAMP or GridWorldEnv.EDGE_MODE_WRAP
         @param initial_state - Starting state for the agent
-        @param goal_states - List of goal states
+        @param goal_states - List of tuples of goal states (defaults to
+            [(0, 4)])
         @param per_step_reward - Reward given every step
         @param goal_reward - Reward upon reaching the goal
         """
 
         assert edge_mode == GridWorldEnv.EDGE_MODE_WRAP \
             or edge_mode == GridWorldEnv.EDGE_MODE_CLAMP, \
-                "Invalid edge_mode: {}".format(edge_mode)
+            "Invalid edge_mode: {}".format(edge_mode)
+
+        # Set default value for parameter goal_states
+        goal_states = goal_states or [(0, 4)]
         
         # Size of the gridworld
-        self._N = N
+        self._size = size
 
         # Wind percentage (chance of moving randomly each step)
         self._wind = wind
@@ -86,22 +92,22 @@ class GridWorldEnv(gym.Env):
         # NB: We store y first, so that the numpy array layout, when shown
         # using print(), matches the 'y-is-vertical' expectation
         self._S = [
-            (y, x) for y in range(self._N) for x in range(self._N)
+            (y, x) for y in range(self._size) for x in range(self._size)
         ]
 
         # Lambda to apply boundary condition to an x, y state
         self._apply_edge_mode = lambda x, y: (
-                min(max(x, 0), self._N-1) if \
-                    (self._edge_mode == GridWorldEnv.EDGE_MODE_CLAMP) \
-                        else x % N,
-                min(max(y, 0), self._N-1) if \
-                    (self._edge_mode == GridWorldEnv.EDGE_MODE_CLAMP) \
-                        else y % N,
+                min(max(x, 0), self._size - 1) if
+                (self._edge_mode == GridWorldEnv.EDGE_MODE_CLAMP)
+                else x % size,
+                min(max(y, 0), self._size - 1) if
+                (self._edge_mode == GridWorldEnv.EDGE_MODE_CLAMP)
+                else y % size,
             )
 
         # Lambda to get the state index of an x, y pair
         self._state_index = lambda x, y: \
-            self._apply_edge_mode(x, y)[1] * N + \
+            self._apply_edge_mode(x, y)[1] * size + \
             self._apply_edge_mode(x, y)[0]
 
         # Set of actions
@@ -127,9 +133,9 @@ class GridWorldEnv(gym.Env):
 
         # Loop over initial states
         for si in [
-                self._state_index(x, y) \
-                    for x in range(self._N) for y in range(self._N)
-            ]:
+                self._state_index(x, y)
+                for x in range(self._size) for y in range(self._size)
+        ]:
 
             # Get the initial state details
             state = self._S[si]
@@ -171,7 +177,7 @@ class GridWorldEnv(gym.Env):
 
         # Gym observation space object (observations are an index indicating
         # the current state)
-        self.observation_space = gym.spaces.Discrete(self._N * self._N)
+        self.observation_space = gym.spaces.Discrete(self._size * self._size)
 
         # Starting state
         self._initial_state = initial_state
@@ -191,23 +197,21 @@ class GridWorldEnv(gym.Env):
             self._per_step_reward + self._goal_reward \
                 if (y, x) in self._goal_states \
                     else self._per_step_reward \
-                        for y in range(self._N) for x in range(self._N)
+                        for y in range(self._size) for x in range(self._size)
         ])
 
         # Reset the MDP
+        self.np_random = None
         self.seed()
         self.reset()
 
-
-    def seed(self, seed = None):
+    def seed(self, seed=None):
         """
         Set the random seed for the environment
         """
-
+        
         self.np_random, seed = seeding.np_random(seed)
-
         return [seed]
-
 
     def step(self, action):
         """
@@ -223,8 +227,8 @@ class GridWorldEnv(gym.Env):
 
         # Sample subsequent state from transition matrix
         self.state = np.random.choice(
-            range(self._N * self._N),
-            p = T[self._state_index(x, y), action, :]
+            range(self._size * self._size),
+            p=self._T[self._state_index(x, y), action, :]
         )
 
         # Check if we're done or not
@@ -238,7 +242,6 @@ class GridWorldEnv(gym.Env):
         # As per the Gym.Env definition, return a (s, r, done, status) tuple
         return self.state, reward, done, {}
 
-
     def reset(self):
         """
         Reset the environment to it's initial state
@@ -248,27 +251,14 @@ class GridWorldEnv(gym.Env):
         
         return self.state
 
-
-    def render(self, mode = 'human'):
+    def render(self, mode='human'):
         """
         Render the environment
 
         TODO ajs 29/Apr/18 Implement viewer functionality
         """
 
-        """
-        screen_width = 600
-        screen_height = 400
-
-        if self.viewer is None:
-            from gym.envs.classic_control import rendering
-            self.viewer = rendering.Viewer(screen_width, screen_height)
-        
-        return self.viewer.render(return_rgb_array = (mode == 'rgb_array'))
-        """
-
         return None
-
 
     def close(self):
         """
@@ -277,7 +267,6 @@ class GridWorldEnv(gym.Env):
 
         if self.viewer:
             self.viewer.close()
-
 
     def order_transition_matrix(self, policy):
         """Computes a sorted transition matrix for the GridWorld MDP
@@ -312,10 +301,9 @@ class GridWorldEnv(gym.Env):
 
         """
 
-        A = copy.copy(self._A)
-        T = copy.copy(self._T)
-        for y in range(self._N):
-            for x in range(self._N):
+        transitions_sorted = copy.copy(self._T)
+        for y in range(self._size):
+            for x in range(self._size):
 
                 si = self._state_index(x, y)
                 a = policy[y][x]
@@ -326,27 +314,26 @@ class GridWorldEnv(gym.Env):
                     pass
                 elif a == '→':
                     # Expert chooses east
-                    tmp = T[si, 0, :]
-                    T[si, 0, :] = T[si, 1, :]
-                    T[si, 1, :] = tmp
+                    tmp = transitions_sorted[si, 0, :]
+                    transitions_sorted[si, 0, :] = transitions_sorted[si, 1, :]
+                    transitions_sorted[si, 1, :] = tmp
                 elif a == '↓':
                     # Expert chooses south
-                    tmp = T[si, 0:1, :]
-                    T[si, 0, :] = T[si, 2, :]
-                    T[si, 1:2, :] = tmp
+                    tmp = transitions_sorted[si, 0:1, :]
+                    transitions_sorted[si, 0, :] = transitions_sorted[si, 2, :]
+                    transitions_sorted[si, 1:2, :] = tmp
                 elif a == '←':
                     # Expert chooses west
-                    tmp = T[si, 0:2, :]
-                    T[si, 0, :] = T[si, 3, :]
-                    T[si, 1:3, :] = tmp
+                    tmp = transitions_sorted[si, 0:2, :]
+                    transitions_sorted[si, 0, :] = transitions_sorted[si, 3, :]
+                    transitions_sorted[si, 1:3, :] = tmp
                 else:
                     # Expert doesn't care / does nothing
                     pass
 
-        return T
+        return transitions_sorted
 
-
-    def plot_reward(self, R):
+    def plot_reward(self, rewards):
         """
         Plots a given reward vector
         """
@@ -359,7 +346,7 @@ class GridWorldEnv(gym.Env):
         line_color = "#efefef"
 
         plt.pcolor(
-            np.reshape(R, (self._N, self._N)),
+            np.reshape(rewards, (self._size, self._size)),
             edgecolors=line_color
         )
         plt.gca().invert_yaxis()
