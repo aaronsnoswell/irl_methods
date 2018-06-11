@@ -9,11 +9,18 @@ import numpy as np
 from cvxopt import matrix, solvers
 
 
-def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
+def linear_programming(
+        sorted_transition_tensor,
+        discount_factor,
+        *,
+        l1_regularisation_weight=0,
+        r_max=1.0,
+        verbose=False
+):
     """Linear Programming IRL by NG and Russell, 2000
 
     Given a transition matrix T[s, a, s'] encoding a stationary
-    deterministic policy and a discount factor gamma, finds a reward vector
+    deterministic policy and a discount factor, finds a reward vector
     R(s) for which the policy is optimal.
 
     This method implements the `Linear Programming IRL algorithm by Ng and
@@ -25,17 +32,17 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     the final vector.
 
     Args:
-        T (numpy array): A sorted transition matrix T[s, a, s']
-            encoding a stationary deterministic policy. The structure must be
-            such that the 0th action T[:, 0, :] corresponds to the expert
-            policy, and T[:, i, :], i != 0 corresponds to the ith non-expert
-            action at each state.
-        gamma (float): The expert's discount factor. Must be in the range
-            [0, 1).
+        sorted_transition_tensor (numpy array): A sorted transition matrix
+            T[s, a, s'] encoding a stationary deterministic policy. The
+            structure must be such that the 0th action T[:, 0, :] corresponds to
+            the expert policy, and T[:, i, :], i != 0 corresponds to the ith
+            non-expert action at each state.
+        discount_factor (float): The expert's discount factor. Must be in the
+            range [0, 1).
         
-        l1 (float): L1 norm regularization weight for the LP optimisation
+        l1_regularisation_weight (float): L1 norm regularization weight for the LP optimisation
             objective function
-        Rmax (float): Maximum reward value
+        r_max (float): Maximum reward value
         verbose (bool): Print progress information
     
     Returns:
@@ -45,11 +52,13 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     """
 
     # Measure size of state and action sets
-    n = T.shape[0]
-    k = T.shape[1]
+    n = sorted_transition_tensor.shape[0]
+    k = sorted_transition_tensor.shape[1]
 
     # Compute the discounted transition matrix inverse term
-    T_disc_inv = np.linalg.inv(np.identity(n) - gamma * T[:, 0, :])
+    _T_disc_inv = np.linalg.inv(
+        np.identity(n) - discount_factor * sorted_transition_tensor[:, 0, :]
+    )
 
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
@@ -68,9 +77,16 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
         This will add (k-1) * n extra constraints
         """
         for i in range(k - 1):
-            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ T_disc_inv
+            constraint_rows = -1 * \
+                (
+                    sorted_transition_tensor[:, 0, :] - \
+                    sorted_transition_tensor[:, i, :]
+                )\
+                @ _T_disc_inv
             A_ub = np.vstack((A_ub, constraint_rows))
-            b_ub = np.vstack((b_ub, np.zeros(shape=[constraint_rows.shape[0], 1])))
+            b_ub = np.vstack(
+                (b_ub, np.zeros(shape=[constraint_rows.shape[0], 1]))
+            )
         return c, A_ub, b_ub
 
     def add_costly_single_step_constraints(c, A_ub, b_ub):
@@ -91,7 +107,7 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
         # Add min{} operator constraints
         for i in range(k - 1):
             # Generate the costly single step constraint terms
-            constraint_rows = -1 * (T[:, 0, :] - T[:, i, :]) @ T_disc_inv
+            constraint_rows = -1 * (sorted_transition_tensor[:, 0, :] - sorted_transition_tensor[:, i, :]) @ _T_disc_inv
 
             # constraint_rows is nxn - we need to add the min{} terms though
             min_operator_entries = np.identity(n)
@@ -152,7 +168,7 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
 
     def add_rmax_constraints(c, A_ub, b_ub, Rmax):
         """
-        Add constraints for a maximum R value Rmax
+        Add constraints for a maximum R value r_max
         This will add n extra constraints
         """
         for i in range(n):
@@ -165,12 +181,12 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     # Compose LP optimisation problem
     c, A_ub, b_ub = add_optimal_policy_constraints(c, A_ub, b_ub)
     c, A_ub, b_ub = add_costly_single_step_constraints(c, A_ub, b_ub)
-    c, A_ub, b_ub = add_rmax_constraints(c, A_ub, b_ub, Rmax)
-    c, A_ub, b_ub = add_l1norm_constraints(c, A_ub, b_ub, l1)
+    c, A_ub, b_ub = add_rmax_constraints(c, A_ub, b_ub, r_max)
+    c, A_ub, b_ub = add_l1norm_constraints(c, A_ub, b_ub, l1_regularisation_weight)
 
     if verbose:
-       print("Number of optimisation variables: {}".format(c.shape[1]))
-       print("Number of constraints: {}".format(A_ub.shape[0]))
+        print("Number of optimisation variables: {}".format(c.shape[1]))
+        print("Number of constraints: {}".format(A_ub.shape[0]))
 
     # Solve for a solution
     if verbose:
@@ -190,7 +206,7 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
         return (vals - min_val) / (max_val - min_val)
     
     # Extract the true optimisation variables and re-scale
-    rewards = Rmax * normalize(res['x'][0:n]).T
+    rewards = r_max * normalize(res['x'][0:n]).T
 
     return rewards, res
 
@@ -713,7 +729,7 @@ if __name__ == "__main__":
     lp_reward, _ = linear_programming(
         sorted_transition_tensor,
         discount_factor,
-        l1=l1,
+        l1_regularisation_weight=l1,
         verbose=True
     )
 
