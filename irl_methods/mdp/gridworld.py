@@ -296,11 +296,12 @@ class GridWorldDiscEnv(gym.Env):
     def order_transition_matrix(self, policy):
         """Computes a sorted transition matrix for the GridWorld MDP
 
-        Given a policy, defined as a 2D numpy array of unicode string arrows,
-        computes a sorted transition matrix T[s, a, s'] such that the 0th
-        action corresponds to the policy's action, and the ith action (i!=0)
-        corresponds to the ith non-policy action, for some arbitrary but
-        consistent ordering of actions.
+        Given a policy, defined as either a function pi(s) -> a taking state
+        integers and returning action integers, or as a 2D numpy array of
+        unicode string arrows, computes a sorted transition matrix T[s, a,
+        s'] such that the 0th action corresponds to the policy's action,
+        and the ith action (i!=0) corresponds to the ith non-policy action,
+        for some arbitrary but consistent ordering of actions.
 
         E.g.
 
@@ -316,7 +317,8 @@ class GridWorldDiscEnv(gym.Env):
         indicates a terminal state.
 
         Args:
-            policy (numpy array) - Expert policy 'a1'. See the example above.
+            policy (numpy array) - Expert policy 'a1' as a function pi(s) ->
+            a or a 2D numpy array. See the example above.
 
         Returns:
             A sorted transition matrix T[s, a, s'], where the 0th action
@@ -331,23 +333,35 @@ class GridWorldDiscEnv(gym.Env):
             for x in range(self._size):
 
                 si = self._xy2s(x, y)
-                a = policy[y][x]
+                action = None
+                if callable(policy):
+                    action = policy(si)
+                else:
+                    action = policy[y][x]
+                    if action == '↑':
+                        action = ACTION_NORTH
+                    elif action == '→':
+                        action = ACTION_EAST
+                    elif action == '↓':
+                        action = ACTION_SOUTH
+                    elif action == '←':
+                        action = ACTION_WEST
 
-                if a == '↑':
+                if action == ACTION_NORTH:
                     # Expert chooses north
                     # North is already first in the GridWorldEnv._A ordering
                     pass
-                elif a == '→':
+                elif action == ACTION_EAST:
                     # Expert chooses east
                     tmp = transitions_sorted[si, 0, :]
                     transitions_sorted[si, 0, :] = transitions_sorted[si, 1, :]
                     transitions_sorted[si, 1, :] = tmp
-                elif a == '↓':
+                elif action == ACTION_SOUTH:
                     # Expert chooses south
                     tmp = transitions_sorted[si, 0:1, :]
                     transitions_sorted[si, 0, :] = transitions_sorted[si, 2, :]
                     transitions_sorted[si, 1:2, :] = tmp
-                elif a == '←':
+                elif action == ACTION_WEST:
                     # Expert chooses west
                     tmp = transitions_sorted[si, 0:2, :]
                     transitions_sorted[si, 0, :] = transitions_sorted[si, 3, :]
@@ -615,6 +629,9 @@ class GridWorldCtsEnv(gym.Env):
 
 a = GridWorldDiscEnv()
 policy = a.get_optimal_policy()
+
+t_ordered = a.order_transition_matrix(policy)
+print(t_ordered)
 
 print(a.render(mode="ansi"))
 while True:
