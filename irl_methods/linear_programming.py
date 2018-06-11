@@ -680,12 +680,22 @@ if __name__ == "__main__":
     # Demonstrate these methods on some gridworld problems
     import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1 import ImageGrid
-    from irl_methods.mdp import GridWorldDiscEnv, GridWorldCtsEnv
+    from irl_methods.mdp.gridworld import (
+        GridWorldDiscEnv,
+        GridWorldCtsEnv,
+        EDGEMODE_WRAP
+    )
 
-    size = 10
+    # Construct a toy gridworld with some randomized parameter to show
+    # variance in the methods
+    size = 8
     gw_disc = GridWorldDiscEnv(
         size=size,
-        goal_states=[np.random.randint(0, size, 2)]
+        goal_states=[
+            np.random.randint(0, size, 2),
+            np.random.randint(0, size, 2)
+        ],
+        edge_mode=EDGEMODE_WRAP
     )
     optimal_policy = gw_disc.get_optimal_policy()
     sorted_transition_matrix = gw_disc.order_transition_matrix(optimal_policy)
@@ -717,29 +727,26 @@ if __name__ == "__main__":
         cbar_pad=0.15,
     )
 
-    for ai, ax in enumerate(grid):
+    # Plot ground truth reward
+    plt.sca(grid[0])
+    gw_disc.plot_reward(grid[0], gw_disc._R, r_min=0, r_max=1)
+    plt.title("Ground Truth Reward", fontsize=font_size)
 
-        plt.sca(ax)
+    # Plot provided policy
+    plt.sca(grid[1])
+    gw_disc.plot_policy(grid[1], optimal_policy)
+    plt.title("Provided policy", fontsize=font_size)
 
-        if ai == 0:
-            gw_disc.plot_reward(ax, gw_disc._R, r_min=0, r_max=1)
-            plt.title("Ground Truth Reward", fontsize=font_size)
-
-        elif ai == 1:
-            # Plot provided policy
-            gw_disc.plot_policy(ax, optimal_policy)
-            plt.title("Provided policy", fontsize=font_size)
-
-        elif ai == 2:
-            # Plot recovered reward
-            gw_disc.plot_reward(ax, lp_reward, r_min=0, r_max=1)
-            plt.title(
-                r"LP IRL Result - $\lambda=${:.2f}, $\gamma=${:.2f}".format(
-                    l1,
-                    discount_factor
-                ),
-                fontsize=font_size
-            )
+    # Plot recovered reward
+    plt.sca(grid[2])
+    gw_disc.plot_reward(grid[2], lp_reward, r_min=0, r_max=1)
+    plt.title(
+        r"LP IRL Result - $\lambda=${:.2f}, $\gamma=${:.2f}".format(
+            l1,
+            discount_factor
+        ),
+        fontsize=font_size
+    )
 
     # Add colorbar
     plt.colorbar(cax=grid[0].cax)
