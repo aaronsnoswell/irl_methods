@@ -54,13 +54,13 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
     # c, A_ub, b_ub = f(c, A_ub, b_ub)
-    #if verbose: print("Composing LP problem...")
+    if verbose:
+        print("Composing LP problem...")
 
     # Prepare LP constraint matrices
     c = np.zeros(shape=[1, n], dtype=float)
     A_ub = np.zeros(shape=[0, n], dtype=float)
     b_ub = np.zeros(shape=[0, 1])
-
 
     def add_optimal_policy_constraints(c, A_ub, b_ub):
         """
@@ -72,7 +72,6 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
             A_ub = np.vstack((A_ub, constraint_rows))
             b_ub = np.vstack((b_ub, np.zeros(shape=[constraint_rows.shape[0], 1])))
         return c, A_ub, b_ub
-
 
     def add_costly_single_step_constraints(c, A_ub, b_ub):
         """
@@ -108,7 +107,6 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
             b_ub = np.vstack((b_ub, np.zeros(shape=[constraint_rows.shape[0], 1])))
         
         return c, A_ub, b_ub
-
 
     def add_l1norm_constraints(c, A_ub, b_ub, l1):
         """
@@ -152,7 +150,6 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
 
         return c, A_ub, b_ub
 
-
     def add_rmax_constraints(c, A_ub, b_ub, Rmax):
         """
         Add constraints for a maximum R value Rmax
@@ -164,7 +161,6 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
             A_ub = np.vstack((A_ub, constraint_row))
             b_ub = np.vstack((b_ub, Rmax))
         return c, A_ub, b_ub
-
     
     # Compose LP optimisation problem
     c, A_ub, b_ub = add_optimal_policy_constraints(c, A_ub, b_ub)
@@ -172,19 +168,18 @@ def linear_programming(T, gamma, *, l1=0, Rmax=1.0, verbose=False):
     c, A_ub, b_ub = add_rmax_constraints(c, A_ub, b_ub, Rmax)
     c, A_ub, b_ub = add_l1norm_constraints(c, A_ub, b_ub, l1)
 
-
     if verbose:
        print("Number of optimisation variables: {}".format(c.shape[1]))
        print("Number of constraints: {}".format(A_ub.shape[0]))
 
     # Solve for a solution
-    if verbose: print("Solving LP problem...")
+    if verbose:
+        print("Solving LP problem...")
 
     # NB: cvxopt.solvers.lp expects a 1d c vector
     from cvxopt import matrix, solvers
     solvers.options['show_progress'] = verbose
     res = solvers.lp(matrix(c[0, :]), matrix(A_ub), matrix(b_ub))
-
 
     def normalize(vals):
         """
@@ -687,11 +682,15 @@ if __name__ == "__main__":
     from mpl_toolkits.axes_grid1 import ImageGrid
     from irl_methods.mdp import GridWorldDiscEnv, GridWorldCtsEnv
 
-    gw_disc = GridWorldDiscEnv(goal_states=[(3, 2)])
+    size = 10
+    gw_disc = GridWorldDiscEnv(
+        size=size,
+        goal_states=[np.random.randint(0, size, 2)]
+    )
     optimal_policy = gw_disc.get_optimal_policy()
     sorted_transition_matrix = gw_disc.order_transition_matrix(optimal_policy)
-    discount_factor = 0.9
-    l1 = 0.1
+    discount_factor = np.random.uniform(0, 1)
+    l1 = np.random.uniform(0, 1)
 
     # Run LP IRL
     lp_reward, _ = linear_programming(
@@ -734,10 +733,13 @@ if __name__ == "__main__":
         elif ai == 2:
             # Plot recovered reward
             gw_disc.plot_reward(ax, lp_reward, r_min=0, r_max=1)
-            plt.title(r"LP IRL Result - $\lambda=${}, $\gamma=${}".format(
-                l1,
-                discount_factor
-            ), fontsize=font_size)
+            plt.title(
+                r"LP IRL Result - $\lambda=${:.2f}, $\gamma=${:.2f}".format(
+                    l1,
+                    discount_factor
+                ),
+                fontsize=font_size
+            )
 
     # Add colorbar
     plt.colorbar(cax=grid[0].cax)
