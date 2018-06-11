@@ -49,24 +49,25 @@ class GridWorldDiscEnv(gym.Env):
         size=5,
         wind=0.3,
         edge_mode=EDGE_MODE_CLAMP,
-        initial_state=(4, 0),
-        goal_states=((0, 4),),
+        initial_state=(0, 0),
+        goal_states=((4, 4),),
         per_step_reward=0,
         goal_reward=1
     ):
         """
         Constructor for the GridWorld environment
 
-        NB: All methods and internal representations use the y-first, y-down
-        coordinate system
+        NB: All methods and internal representations that work with GridWorld
+        indices use an (x, y) coordinate system where +x is to the right and
+        +y is up.
 
         @param size - The size of the grid world
         @param wind - The chance of a uniform random action being taken each
             step
-        @param edge_mode - Edge of world behaviour, one of
-            GridWorldEnv.EDGE_MODE_CLAMP or GridWorldEnv.EDGE_MODE_WRAP
-        @param initial_state - Starting state for the agent
-        @param goal_states - List of tuples of goal states
+        @param edge_mode - Edge of world behaviour, one of EDGE_MODE_CLAMP or
+            EDGE_MODE_WRAP
+        @param initial_state - Starting state as an (x, y) tuple for the agent
+        @param goal_states - List of tuples of (x, y) goal states
         @param per_step_reward - Reward given every step
         @param goal_reward - Reward upon reaching the goal
         """
@@ -85,10 +86,8 @@ class GridWorldDiscEnv(gym.Env):
         self._edge_mode = edge_mode
 
         # Set of states
-        # NB: We store y first, so that the numpy array layout, when shown
-        # using print(), matches the 'y-is-vertical' expectation
         self._S = [
-            (y, x) for y in range(self._size) for x in range(self._size)
+            (x, y) for y in range(self._size) for x in range(self._size)
         ]
 
         # Lambda to apply boundary condition to an x, y state
@@ -102,25 +101,28 @@ class GridWorldDiscEnv(gym.Env):
             )
 
         # Lambda to get the state index of an x, y pair
-        self._state_index = lambda x, y: \
+        self._xy2s = lambda x, y: \
             self._apply_edge_mode(x, y)[1] * size + \
             self._apply_edge_mode(x, y)[0]
+
+        # Lambda to convert a state to an x, y pair
+        self._s2xy = lambda s: (s % self._size, s // self._size)
 
         # Set of actions
         # NB: The y direction is inverted so that the numpy array layout, when
         # shown using print(), matches the 'up is up' expectation
         self._A = [
             # North
-            (-1, 0),
-
-            # East
             (0, 1),
 
-            # South
+            # East
             (1, 0),
 
-            # West
+            # South
             (0, -1),
+
+            # West
+            (-1, 0),
 
         ]
 
@@ -128,41 +130,36 @@ class GridWorldDiscEnv(gym.Env):
         self._T = np.zeros(shape=(len(self._S), len(self._A), len(self._S)))
 
         # Loop over initial states
-        for si in [
-                self._state_index(x, y)
-                for x in range(self._size) for y in range(self._size)
-        ]:
+        for si, state in enumerate(self._S):
 
             # Get the initial state details
-            state = self._S[si]
-            x = state[1]
-            y = state[0]
+            x = state[0]
+            y = state[1]
 
             # Loop over actions
-            for ai in range(len(self._A)):
+            for ai, action in enumerate(self._A):
 
                 # Get action details
-                action = self._A[ai]
-                dx = action[1]
-                dy = action[0]
+                dx = action[0]
+                dy = action[1]
 
                 # Update probability for desired action
                 self._T[
                     si,
                     ai,
-                    self._state_index(x + dx, y + dy)
+                    self._xy2s(x + dx, y + dy)
                 ] += (1 - wind)
 
                 # Update probability for stochastic alternatives
                 for wind_action in self._A:
 
-                    wind_dx = wind_action[1]
-                    wind_dy = wind_action[0]
+                    wind_dx = wind_action[0]
+                    wind_dy = wind_action[1]
 
                     self._T[
                         si,
                         ai,
-                        self._state_index(x + wind_dx, y + wind_dy)
+                        self._xy2s(x + wind_dx, y + wind_dy)
                     ] += wind / len(self._A)
 
         # Gym action space object (index corresponds to entry in self._A list)
@@ -170,14 +167,14 @@ class GridWorldDiscEnv(gym.Env):
 
         # Gym observation space object (observations are an index indicating
         # the current state)
-        self.observation_space = gym.spaces.Discrete(self._size * self._size)
+        self.observation_space = gym.spaces.Discrete(len(self._S))
 
         # Starting state
-        self._initial_state = initial_state
+        self._initial_state = self._xy2s(*initial_state)
         self.state = self._initial_state
 
         # Goal states
-        self._goal_states = goal_states
+        self._goal_states = [self._xy2s(*s) for s in goal_states]
 
         # Per step reward
         self._per_step_reward = per_step_reward
@@ -188,9 +185,9 @@ class GridWorldDiscEnv(gym.Env):
         # Store true reward
         self._R = np.array([
             self._per_step_reward + self._goal_reward
-            if (y, x) in self._goal_states
+            if s in self._goal_states
             else self._per_step_reward
-            for y in range(self._size) for x in range(self._size)
+            for s in range(len(self._S))
         ])
 
         # Reset the MDP
@@ -223,14 +220,10 @@ class GridWorldDiscEnv(gym.Env):
         assert self.action_space.contains(action), \
             "%r (%s) invalid" % (action, type(action))
 
-        # Get current x and y coordinates
-        x = self.state[1]
-        y = self.state[0]
-
         # Sample subsequent state from transition matrix
         self.state = np.random.choice(
-            range(self._size * self._size),
-            p=self._T[self._state_index(x, y), action, :]
+            range(len(self._S)),
+            p=self._T[self.state, action, :]
         )
 
         # Check if we're done or not
@@ -265,17 +258,18 @@ class GridWorldDiscEnv(gym.Env):
             ret += edge_symbol * (self._size + 2) + "\n"
 
             # Iterate over grid
-            for y in range(self._size):
+            for y in range(self._size-1, -1, -1):
 
                 # Add left boundary
                 ret += edge_symbol
 
                 # Draw gridworld objects
                 for x in range(self._size):
-                    if (y, x) in self._goal_states:
-                        ret += "$"
-                    elif (y, x) == self.state:
+                    s = self._xy2s(x, y)
+                    if s == self.state:
                         ret += "@"
+                    elif s in self._goal_states:
+                        ret += "$"
                     else:
                         ret += " "
 
@@ -290,11 +284,14 @@ class GridWorldDiscEnv(gym.Env):
 
             return ret
 
-        else:
+        elif mode == "human":
             # Render using a GUI
             pass
 
-        return None
+        else:
+
+            # Let super handle it
+            super(GridWorldDiscEnv, self).render(mode=mode)
 
     def order_transition_matrix(self, policy):
         """Computes a sorted transition matrix for the GridWorld MDP
@@ -333,7 +330,7 @@ class GridWorldDiscEnv(gym.Env):
         for y in range(self._size):
             for x in range(self._size):
 
-                si = self._state_index(x, y)
+                si = self._xy2s(x, y)
                 a = policy[y][x]
 
                 if a == '↑':
@@ -360,6 +357,87 @@ class GridWorldDiscEnv(gym.Env):
                     pass
 
         return transitions_sorted
+
+    def get_optimal_policy(self):
+        """Returns an optimal policy function for this MDP
+
+        Returns:
+            (function): An optimal policy p(s) -> a that maps states to
+                actions
+        """
+
+        # Collect goal states as (x, y) indices
+        _goal_states = [self._s2xy(g) for g in self._goal_states]
+
+        # If we're in a wrapping gridworld, the nearest goal could outside the
+        # world bounds. Add virtual goals to help the policy account for this
+        if self._edge_mode == EDGE_MODE_WRAP:
+            for i in range(len(self._goal_states)):
+                g = np.array(self._s2xy(self._goal_states[i]))
+                _goal_states.append(tuple(g - (self._size, self._size)))
+                _goal_states.append(tuple(g - (0, self._size)))
+                _goal_states.append(tuple(g - (self._size, 0)))
+
+        def policy(state):
+            """A simple expert policy to solve the continuous gridworld
+            problem
+
+            Args:
+                state (tuple): The current MDP state as an (x, y) tuple of
+                    float
+
+            Returns:
+                (int): One of GridWorldCtsEnv.[ACTION_NORTH],
+                    GridWorldCtsEnv.ACTION_EAST, GridWorldCtsEnv.ACTION_SOUTH,
+                    or GridWorldCtsEnv.ACTION_WEST
+            """
+
+            # Pick the nearest goal
+            nearest_goal = None
+
+            if len(_goal_states) == 1:
+                # We only have one goal to consider
+                nearest_goal = _goal_states[0]
+
+            else:
+                # Find the nearest goal - it could be behind us
+                smallest_distance = math.inf
+                for g in _goal_states:
+                    distance = np.linalg.norm(np.array(g) - self._s2xy(state))
+                    if distance < smallest_distance:
+                        smallest_distance = distance
+                        nearest_goal = g
+
+            # Find the distance to the goal
+            dx, dy = np.array(nearest_goal) - self._s2xy(state)
+
+            direction = None
+            if abs(dx) == abs(dy):
+                # x and y distances are equal - flip a coin to avoid bias in
+                # the policy
+                if np.random.uniform() > 0.5:
+                    # Move vertically
+                    direction = "vertically"
+                else:
+                    # Move horizontally
+                    direction = "horizontally"
+
+            if abs(dx) > abs(dy):
+                # We need to move horizontally more than vertically
+                direction = "horizontally"
+            else:
+                # We need to move vertically more than horizontally
+                direction = "vertically"
+
+            # Compute the actual movement
+            if direction == "horizontally":
+                return ACTION_EAST if dx > 0 \
+                    else ACTION_WEST
+            else:
+                return ACTION_NORTH if dy > 0 \
+                    else ACTION_SOUTH
+
+        return policy
 
     def plot_reward(self, rewards):
         """
@@ -529,84 +607,23 @@ class GridWorldCtsEnv(gym.Env):
     def render(self, mode='human'):
         """Render the environment
 
-        TODO ajs 29/Apr/18 Implement viewer functionality
+        TODO ajs 29/Apr/18 Implement render functionality
         """
 
         return None
 
-    def get_optimal_policy(self):
-        """Returns an optimal policy function for this MDP
 
-        Returns:
-            (function): An optimal policy p(s) -> a that maps states to
-                actions
-        """
+a = GridWorldDiscEnv()
+policy = a.get_optimal_policy()
 
-        # Compute goal location
-        goal_positions = [np.mean(
-            np.vstack(
-                (
-                    self._goal_space.low,
-                    self._goal_space.high
-                )
-            ),
-            axis=0
-        )]
+print(a.render(mode="ansi"))
+while True:
+    action = policy(a.state)
+    print("Taking action {}".format(ACTION_STRINGS[action]))
+    s, r, done, status = a.step(action)
+    print(a.render(mode="ansi"))
 
-        # If we're in a wrapping gridworld, the nearest goal could outside the
-        # world bounds. Add virtual goals to help the policy account for this
-        if self._edge_mode == GridWorldCtsEnv.EDGE_MODE_WRAP:
-            goal_positions.append(
-                goal_positions[0] - (1, 1)
-            )
-            goal_positions.append(
-                goal_positions[0] - (1, 0)
-            )
-            goal_positions.append(
-                goal_positions[0] - (0, 1)
-            )
+    if done:
+        break
 
-        def policy(state):
-            """A simple expert policy to solve the continuous gridworld
-            problem
-
-            Args:
-                state (tuple): The current MDP state as an (x, y) tuple of
-                    float
-
-            Returns:
-                (int): One of GridWorldCtsEnv.[ACTION_NORTH],
-                    GridWorldCtsEnv.ACTION_EAST, GridWorldCtsEnv.ACTION_SOUTH,
-                    or GridWorldCtsEnv.ACTION_WEST
-            """
-
-            # Pick the nearest goal
-            nearest_goal = None
-
-            if len(goal_positions) == 1:
-                # We only have one goal to consider
-                nearest_goal = goal_positions[0]
-
-            else:
-                # Find the nearest goal - it could be behind us
-                smallest_distance = math.inf
-                for g in goal_positions:
-                    distance = np.linalg.norm(np.array(g) - state)
-                    if distance < smallest_distance:
-                        smallest_distance = distance
-                        nearest_goal = g
-
-            # Find the distance to the goal
-            dx, dy = np.array(nearest_goal) - state
-
-            if abs(dx) > abs(dy):
-                # We need to move horizontally more than vertically
-                return ACTION_EAST if dx > 0 \
-                    else ACTION_WEST
-
-            else:
-                # We need to move vertically more than horizontally
-                return ACTION_NORTH if dy > 0 \
-                    else ACTION_SOUTH
-
-        return policy
+print("Done")
