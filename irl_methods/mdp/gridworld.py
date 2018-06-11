@@ -203,7 +203,7 @@ class GridWorldDiscEnv(gym.Env):
         self._goal_reward = goal_reward
 
         # Store true reward
-        self._R = np.array([
+        self.ground_truth_reward = np.array([
             self._per_step_reward + self._goal_reward
             if s in self._goal_states
             else self._per_step_reward
@@ -577,85 +577,6 @@ class GridWorldDiscEnv(gym.Env):
         else:
             assert False, "Invalid feature map: {}".format(feature_map)
 
-    def order_transition_matrix(self, policy):
-        """Computes a sorted transition matrix for the GridWorld MDP
-
-        Given a policy, defined as either a function pi(s) -> a taking state
-        integers and returning action integers, or as a 2D numpy array of
-        unicode string arrows, computes a sorted transition matrix T[s, a,
-        s'] such that the 0th action corresponds to the policy's action,
-        and the ith action (i!=0) corresponds to the ith non-policy action,
-        for some arbitrary but consistent ordering of actions.
-
-        E.g.
-
-        pi_star = [
-            ['→', '→', '→', '→', ' '],
-            ['↑', '→', '→', '↑', '↑'],
-            ['↑', '↑', '↑', '↑', '↑'],
-            ['↑', '↑', '→', '↑', '↑'],
-            ['↑', '→', '→', '→', '↑'],
-        ]
-
-        is the policy used in Ng and Russell's 2000 IRL paper. NB: a space
-        indicates a terminal state.
-
-        Args:
-            policy (numpy array) - Expert policy 'a1' as a function pi(s) ->
-            a or a 2D numpy array. See the example above.
-
-        Returns:
-            A sorted transition matrix T[s, a, s'], where the 0th action
-            T[:, 0, :] corresponds to following the expert policy, and the
-            other action entries correspond to the remaining action options,
-            sorted according to the ordering in GridWorldEnv._A
-
-        """
-
-        transitions_sorted = copy.copy(self._T)
-        for y in range(self._size):
-            for x in range(self._size):
-
-                si = self._xy2s(x, y)
-                action = None
-                if callable(policy):
-                    action = policy(si)
-                else:
-                    action = policy[y][x]
-                    if action == '↑':
-                        action = ACTION_NORTH
-                    elif action == '→':
-                        action = ACTION_EAST
-                    elif action == '↓':
-                        action = ACTION_SOUTH
-                    elif action == '←':
-                        action = ACTION_WEST
-
-                if action == ACTION_NORTH:
-                    # Expert chooses north
-                    # North is already first in the GridWorldEnv._A ordering
-                    pass
-                elif action == ACTION_EAST:
-                    # Expert chooses east
-                    tmp = transitions_sorted[si, 0, :]
-                    transitions_sorted[si, 0, :] = transitions_sorted[si, 1, :]
-                    transitions_sorted[si, 1, :] = tmp
-                elif action == ACTION_SOUTH:
-                    # Expert chooses south
-                    tmp = transitions_sorted[si, 0:1, :]
-                    transitions_sorted[si, 0, :] = transitions_sorted[si, 2, :]
-                    transitions_sorted[si, 1:2, :] = tmp
-                elif action == ACTION_WEST:
-                    # Expert chooses west
-                    tmp = transitions_sorted[si, 0:2, :]
-                    transitions_sorted[si, 0, :] = transitions_sorted[si, 3, :]
-                    transitions_sorted[si, 1:3, :] = tmp
-                else:
-                    # Expert doesn't care / does nothing
-                    pass
-
-        return transitions_sorted
-
     def get_optimal_policy(self):
         """Returns an optimal policy function for this MDP
 
@@ -675,6 +596,9 @@ class GridWorldDiscEnv(gym.Env):
                 _goal_states.append(tuple(g - (self._size, self._size)))
                 _goal_states.append(tuple(g - (0, self._size)))
                 _goal_states.append(tuple(g - (self._size, 0)))
+                _goal_states.append(tuple(g + (self._size, self._size)))
+                _goal_states.append(tuple(g + (0, self._size)))
+                _goal_states.append(tuple(g + (self._size, 0)))
 
         def policy(state):
             """A simple expert policy to solve the continuous gridworld
@@ -733,6 +657,58 @@ class GridWorldDiscEnv(gym.Env):
                     else ACTION_SOUTH
 
         return policy
+
+    def ordered_transition_tensor(self, policy):
+        """Computes a sorted transition matrix for the GridWorld MDP
+
+        Given a policy, defined as a function pi(s) -> a taking state
+        integers and returning action integers, computes a sorted transition
+        matrix T[s, a, s'] such that the 0th action corresponds to the
+        policy's action, and the ith action (i!=0) corresponds to the ith
+        non-policy action, for some arbitrary but consistent ordering of
+        actions.
+
+        Args:
+            policy (function) - Expert policy 'a1' as a function pi(s) -> a
+
+        Returns:
+            (numpy array): A sorted transition matrix T[s, a, s'], where the
+            0th action T[:, 0, :] corresponds to following the expert policy,
+            and the other action entries correspond to the remaining action
+            options, sorted according to the ordering in self._A
+        """
+
+        transitions_sorted = copy.copy(self._T)
+        for y in range(self._size):
+            for x in range(self._size):
+
+                si = self._xy2s(x, y)
+                action = policy(si)
+
+                if action == ACTION_NORTH:
+                    # Expert chooses north
+                    # North is already first in the GridWorldEnv._A ordering
+                    pass
+                elif action == ACTION_EAST:
+                    # Expert chooses east
+                    tmp = transitions_sorted[si, 0, :]
+                    transitions_sorted[si, 0, :] = transitions_sorted[si, 1, :]
+                    transitions_sorted[si, 1, :] = tmp
+                elif action == ACTION_SOUTH:
+                    # Expert chooses south
+                    tmp = transitions_sorted[si, 0:1, :]
+                    transitions_sorted[si, 0, :] = transitions_sorted[si, 2, :]
+                    transitions_sorted[si, 1:2, :] = tmp
+                elif action == ACTION_WEST:
+                    # Expert chooses west
+                    tmp = transitions_sorted[si, 0:2, :]
+                    transitions_sorted[si, 0, :] = transitions_sorted[si, 3, :]
+                    transitions_sorted[si, 1:3, :] = tmp
+                else:
+                    # Expert doesn't care / does nothing
+                    pass
+
+        return transitions_sorted
 
 
 class GridWorldCtsEnv(gym.Env):
@@ -820,6 +796,10 @@ class GridWorldCtsEnv(gym.Env):
         # Goal reward
         self._goal_reward = goal_reward
 
+        # Ground truth reward function
+        self.ground_truth_reward = lambda s: self._per_step_reward + \
+            (self._goal_reward if self._goal_space.contains(np.array(s)) else 0)
+
         # Check if we're done or not
         self._done = lambda: self._goal_space.contains(np.array(self.state))
 
@@ -853,6 +833,9 @@ class GridWorldCtsEnv(gym.Env):
 
     def step(self, action):
         """Take one step in the environment
+
+        Args:
+            action (int): Action index
         """
 
         assert self.action_space.contains(action), \
@@ -873,10 +856,17 @@ class GridWorldCtsEnv(gym.Env):
 
         # Apply boundary condition
         if self._edge_mode == EDGEMODE_WRAP:
-            self.state = tuple(new_state % 1.0)
+            self.state = np.array(tuple(new_state % 1.0))
 
         else:
-            self.state = tuple(map(lambda a: min(max(0, a), 1), new_state))
+            self.state = np.array(
+                tuple(
+                    map(
+                        lambda a: min(max(0, a), 1),
+                        new_state
+                    )
+                )
+            )
 
         # Check done-ness
         done = self._done()
@@ -912,15 +902,8 @@ class GridWorldCtsEnv(gym.Env):
                 self._fig = plt.figure()
                 self._ax = self._fig.gca()
 
-                # Render the goal patch
-                self._goal_patch = mpatches.Rectangle(
-                    self._goal_space.low,
-                    self._goal_space.high[0] - self._goal_space.low[0],
-                    self._goal_space.high[1] - self._goal_space.low[1],
-                    color="green",
-                    ec=None
-                )
-                self._ax.add_patch(self._goal_patch)
+                # Configure plot
+                self.configure_plot(self._ax)
 
                 # Render the current position
                 self._state_patch = mpatches.Circle(
@@ -930,16 +913,6 @@ class GridWorldCtsEnv(gym.Env):
                     ec=None
                 )
                 self._ax.add_patch(self._state_patch)
-
-                self._ax.set_title(
-                    "Continuous {} GridWorld, wind={}".format(
-                        EDGEMODE_STRINGS[self._edge_mode],
-                        self._wind_range
-                    )
-                )
-                self._ax.set_aspect(1)
-                self._ax.set_xlim([0, 1])
-                self._ax.set_ylim([0, 1])
 
             else:
                 # We assume a stationary goal
@@ -962,6 +935,124 @@ class GridWorldCtsEnv(gym.Env):
         else:
             # Let super handle it
             super(GridWorldCtsEnv, self).render(mode=mode)
+
+    def configure_plot(self, ax, *, render_goal=True):
+        """Helper method to configure matplotlib axes, draw common elements
+
+        Args:
+            ax (matplotlib.axes.Axes): Axes to render to
+
+            render_goal (bool): Draw patch to indicate the goal space
+        """
+
+        # Render the goal patch
+        if render_goal:
+            goal_patch = mpatches.Rectangle(
+                self._goal_space.low,
+                self._goal_space.high[0] - self._goal_space.low[0],
+                self._goal_space.high[1] - self._goal_space.low[1],
+                color="green",
+                ec=None
+            )
+            ax.add_patch(goal_patch)
+
+        # Set title
+        ax.set_title(
+            "Continuous {} GridWorld, wind = {}".format(
+                EDGEMODE_STRINGS[self._edge_mode],
+                self._wind_range
+            )
+        )
+
+        # Configure axes
+        ax.set_aspect(1, adjustable="box")
+        ax.set_xlim([0, 1])
+        ax.set_ylim([0, 1])
+
+    def plot_reward(self, ax, reward_fn, r_min, r_max, *, resolution=10):
+        """Rasters a given reward function
+
+        Args:
+            ax (matplotlib.axes.Axes): Axes to render to
+            reward_fn (function): Reward function r(s) -> float
+            r_min (float): Minimum reward - used for color map scaling
+            r_max (float): Maximum reward - used for color map scaling
+
+            resolution (int): Raster resolution width/height
+        """
+
+        # Set up plot
+        self.configure_plot(ax, render_goal=False)
+
+        y, x = np.mgrid[0:resolution+1, 0:resolution+1] / resolution
+        z = np.zeros(shape=(resolution, resolution))
+        for yi in range(resolution):
+            for xi in range(resolution):
+                state = np.array((
+                    xi/resolution + (1/resolution)/2,
+                    yi/resolution + (1/resolution)/2
+                ))
+                z[yi, xi] = reward_fn(state)
+
+        plt.pcolormesh(
+            x,
+            y,
+            z,
+            vmin=r_min,
+            vmax=r_max
+        )
+
+    def plot_policy(self, ax, policy, resolution=10):
+        """Plots a given policy function
+
+        Args:
+            ax (matplotlib.axes.Axes): Axes to render to
+            policy (function): Policy p(s) -> a mapping state indices to actions
+        """
+
+        # Set up plot
+        self.configure_plot(ax)
+
+        cell_size = 1/resolution
+        x, y = np.mgrid[0:resolution, 0:resolution] / resolution + (cell_size/2)
+        u = np.zeros(shape=x.shape)
+        v = np.zeros(shape=x.shape)
+
+        for sx, sy in list(zip(
+                np.reshape(x, (-1,)),
+                np.reshape(y, (-1,))
+        )):
+
+            # Convert to x, y coordinate
+            x_coord = math.floor(sx * resolution)
+            y_coord = math.floor(sy * resolution)
+
+            # Get action from policy and convert to a delta
+            state = np.array((sx, sy))
+            action = policy(state)
+            dx, dy = 0, 0
+            if action == ACTION_NORTH:
+                dy = 1
+            elif action == ACTION_EAST:
+                dx = 1
+            elif action == ACTION_SOUTH:
+                dy = -1
+            elif action == ACTION_WEST:
+                dx = -1
+
+            u[x_coord, y_coord] = dx
+            v[x_coord, y_coord] = dy
+
+        plt.quiver(
+            x,
+            y,
+            u,
+            v,
+            pivot="mid",
+            edgecolor="black",
+            facecolor="white",
+            linewidth=0.25
+        )
 
     def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
         """Returns a feature vector for the given state
@@ -1022,6 +1113,15 @@ class GridWorldCtsEnv(gym.Env):
             goal_positions.append(
                 goal_positions[0] - (0, 1)
             )
+            goal_positions.append(
+                goal_positions[0] + (1, 1)
+            )
+            goal_positions.append(
+                goal_positions[0] + (1, 0)
+            )
+            goal_positions.append(
+                goal_positions[0] + (0, 1)
+            )
 
         def policy(state):
             """A simple expert policy to solve the continuous gridworld
@@ -1066,6 +1166,57 @@ class GridWorldCtsEnv(gym.Env):
 
         return policy
 
+    def ordered_transition_function(self, policy):
+        """Computes a sorted transition function for the GridWorld MDP
+
+        Given a policy, defined as a function pi(s) -> a taking state
+        integers and returning action integers, computes a sorted transition
+        function T(s, a_i) -> s' such that the 0th action corresponds to the
+        policy's action, and the ith action (i!=0) corresponds to the ith
+        non-policy action, for some arbitrary but consistent ordering of
+        actions.
+
+        Args:
+            policy (function) - Expert policy 'a1' as a function pi(s) -> a
+
+        Returns:
+            (function): A sorted transition function T(s, a_i) -> s', where the
+            0th action T(:, 0) corresponds to following the expert policy,
+            and the other action entries correspond to the remaining action
+            options, sorted according to the ordering in self._A
+        """
+
+        def _T(s, a_i):
+            """sorted transition function T(s, a_i) -> s'
+
+            Args:
+                s (int): State index
+                a_i: Action index, where 0 corresponds to following the
+                    expert policy
+
+            Returns:
+                (int): New state index
+            """
+
+            # Get expert action
+            action = policy(s)
+
+            # Re-order the list of possible actions
+            all_actions = list(range(len(self._A)))
+            all_actions.remove(action)
+            all_actions.insert(0, action)
+
+            # We actually take the ith action
+            actual_action = all_actions[a_i]
+
+            self.reset()
+            self.state = s
+            s, r, done, _ = self.step(actual_action)
+
+            return s
+
+        return _T
+
 
 if __name__ == "__main__":
     # Simple example of how to use these classes
@@ -1076,7 +1227,7 @@ if __name__ == "__main__":
     policy = gw_disc.get_optimal_policy()
 
     print("Ordered transition matrix:")
-    t_ordered = gw_disc.order_transition_matrix(policy)
+    t_ordered = gw_disc.ordered_transition_tensor(policy)
     print(t_ordered)
 
     # Choose a feature map to use

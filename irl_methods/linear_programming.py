@@ -203,7 +203,7 @@ def large_linear_programming(s0, k, T, phi, *, N=1, p=2.0, verbose=False):
     space, finds a weight vector alpha for which the given policy is optimal
     with respect to R(s) = alpha · phi(s).
 
-    See https://thinkingwires.com/posts/2018-02-13-irl-tutorial-1.html> for a
+    See https://thinkingwires.com/posts/2018-02-13-irl-tutorial-1.html for a
     good overview of this method.
 
     Args:
@@ -226,9 +226,9 @@ def large_linear_programming(s0, k, T, phi, *, N=1, p=2.0, verbose=False):
         verbose (bool): Print progress information
 
     Returns:
-        A tuple containing;
-            - A numpy array of alpha coefficients for the basis functions.
-            - A result object from the LP optimiser
+        (numpy array) A weight vector for the reward function basis functions
+            that makes the given policy optimal
+        (dict): A result object from the LP optimiser
     """
 
     # Measure number of sampled states
@@ -680,75 +680,192 @@ if __name__ == "__main__":
     # Demonstrate these methods on some gridworld problems
     import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1 import ImageGrid
+    from irl_methods.utils import gaussian, indicator
     from irl_methods.mdp.gridworld import (
         GridWorldDiscEnv,
         GridWorldCtsEnv,
         EDGEMODE_WRAP
     )
 
-    # Construct a toy gridworld with some randomized parameter to show
+    # Construct a toy discrete gridworld with some randomized parameters to show
     # variance in the methods
     size = 8
+    cell_size = 1 / size
+    goal_state = np.random.randint(0, size, 2)
     gw_disc = GridWorldDiscEnv(
         size=size,
-        goal_states=[
-            np.random.randint(0, size, 2),
-            np.random.randint(0, size, 2)
-        ],
+        goal_states=[goal_state],
+        per_step_reward=0,
+        goal_reward=1,
         edge_mode=EDGEMODE_WRAP
     )
-    optimal_policy = gw_disc.get_optimal_policy()
-    sorted_transition_matrix = gw_disc.order_transition_matrix(optimal_policy)
+    disc_optimal_policy = gw_disc.get_optimal_policy()
+    sorted_transition_tensor = gw_disc.ordered_transition_tensor(
+        disc_optimal_policy
+    )
     discount_factor = np.random.uniform(0, 1)
     l1 = np.random.uniform(0, 1)
 
     # Run LP IRL
     lp_reward, _ = linear_programming(
-        sorted_transition_matrix,
+        sorted_transition_tensor,
         discount_factor,
         l1=l1,
         verbose=True
     )
 
+    # Construct a toy continuous gridworld with some randomized parameters to
+    # show variance in the methods
+    initial_state = np.random.uniform(0, 1, 2)
+    gw_cts = GridWorldCtsEnv(
+        initial_state=(0, 0),
+        goal_range=[goal_state / size, goal_state / size + cell_size],
+        per_step_reward=0,
+        goal_reward=1,
+        edge_mode=EDGEMODE_WRAP
+    )
+    cts_optimal_policy = gw_cts.get_optimal_policy()
+    ordered_transition_function = gw_cts.ordered_transition_function(
+        cts_optimal_policy
+    )
+
+    # Define a set of basis functions
+    basis_function_means = [
+        (x/size + cell_size/2, y/size + cell_size/2)
+        for y in range(size)
+        for x in range(size)
+    ]
+    sigma = 0.125
+    covariance_matrix = np.diag((sigma, sigma))
+    basis_functions = [
+        gaussian(mu, covariance_matrix)
+        for mu in basis_function_means
+    ]
+    # basis_functions = [
+    #     indicator(mu, np.array((cell_size, cell_size)))
+    #     for mu in basis_function_means
+    # ]
+
+    # Run LP IRL for large state spaces
+    num_samples = 100
+    state_sample = np.random.uniform(0, 1, (num_samples, 2))
+    num_actions = len(gw_cts._A)
+    num_transition_samples = 1
+    penalty_coefficient = np.random.uniform(1, 5, 1)
+    alpha_vector, _ = large_linear_programming(
+        state_sample,
+        num_actions,
+        ordered_transition_function,
+        basis_functions,
+        verbose=True,
+        N=num_transition_samples,
+        p=penalty_coefficient
+    )
+
+    # Compose reward function lambda
+    cts_reward = lambda s: np.dot(
+        alpha_vector,
+        [fn(s) for fn in basis_functions]
+    )[0]
+
     # Make a new figure
     fig = plt.figure()
     plt.set_cmap("viridis")
-    font_size = 11
+    font_size = 7
 
     grid = ImageGrid(
         fig,
         111,
-        nrows_ncols=(1, 3),
-        axes_pad=0.15,
+        nrows_ncols=(3, 3),
+        axes_pad=0.3,
         share_all=True,
         cbar_location="right",
         cbar_mode="single",
-        cbar_size="7%",
+        cbar_size="5%",
         cbar_pad=0.15,
     )
 
+    # ========= LP IRL
+
     # Plot ground truth reward
     plt.sca(grid[0])
-    gw_disc.plot_reward(grid[0], gw_disc._R, r_min=0, r_max=1)
-    plt.title("Ground Truth Reward", fontsize=font_size)
+    gw_disc.plot_reward(grid[0], gw_disc.ground_truth_reward, r_min=0, r_max=1)
+    plt.title("Ground truth reward", fontsize=font_size)
 
     # Plot provided policy
     plt.sca(grid[1])
-    gw_disc.plot_policy(grid[1], optimal_policy)
+    gw_disc.plot_policy(grid[1], disc_optimal_policy)
     plt.title("Provided policy", fontsize=font_size)
 
     # Plot recovered reward
     plt.sca(grid[2])
     gw_disc.plot_reward(grid[2], lp_reward, r_min=0, r_max=1)
-    plt.title(
-        r"LP IRL Result - $\lambda=${:.2f}, $\gamma=${:.2f}".format(
-            l1,
-            discount_factor
-        ),
-        fontsize=font_size
+    plt.title("LP IRL result", fontsize=font_size)
+
+    # ========= LP IRL for large state spaces
+
+    # Plot ground truth reward
+    plt.sca(grid[3])
+    gw_cts.plot_reward(
+        grid[3],
+        gw_cts.ground_truth_reward,
+        0,
+        1,
+        resolution=size
     )
+    plt.title("Ground truth reward", fontsize=font_size)
+
+    # Plot provided policy and state sample
+    plt.sca(grid[4])
+    gw_cts.plot_policy(
+        grid[4],
+        cts_optimal_policy,
+        resolution=size
+    )
+    plt.scatter(
+        state_sample[:, 0],
+        state_sample[:, 1],
+        s=10,
+        alpha=0.3
+    )
+    plt.title("Provided policy", fontsize=font_size)
+
+    # Plot recovered reward
+    plt.sca(grid[5])
+    gw_cts.plot_reward(
+        grid[5],
+        cts_reward,
+        0,
+        1,
+        resolution=size
+    )
+    plt.title("LLP IRL result", fontsize=font_size)
+
+    # ========= LP IRL with trajectories
+
+    # Plot ground truth reward
+    plt.sca(grid[6])
+    gw_cts.plot_reward(
+        grid[6],
+        gw_cts.ground_truth_reward,
+        0,
+        1,
+        resolution=size
+    )
+    plt.title("Ground truth reward", fontsize=font_size)
+
+    # Plot provided trajectories
+    plt.sca(grid[7])
+    #gw_cts.plot_policy(grid[7], cts_optimal_policy)
+    plt.title("Provided trajectories", fontsize=font_size)
+
+    # Plot recovered reward
+    plt.sca(grid[8])
+    #gw_cts.plot_policy(grid[8], cts_optimal_policy)
+    plt.title("TLP IRL result", fontsize=font_size)
 
     # Add colorbar
+    plt.sca(grid[0])
     plt.colorbar(cax=grid[0].cax)
 
     plt.show()
