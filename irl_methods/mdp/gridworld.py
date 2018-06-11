@@ -195,6 +195,12 @@ class GridWorldDiscEnv(gym.Env):
         # Check if we're done or not
         self._done = lambda: self.state in self._goal_states
 
+        # Members used for rendering
+        self._fig = None
+        self._ax = None
+        self._goal_patches = None
+        self._state_patch = None
+
         # Reset the MDP
         self.np_random = None
         self.seed()
@@ -241,6 +247,18 @@ class GridWorldDiscEnv(gym.Env):
 
         # As per the Gym.Env definition, return a (s, r, done, status) tuple
         return self.state, reward, done, {}
+
+    def close(self):
+        """Cleans up
+        """
+        if self._fig is not None:
+            # Close our plot window
+            plt.close(self._fig)
+
+        self._fig = None
+        self._ax = None
+        self._goal_patches = None
+        self._state_patch = None
 
     def render(self, mode="human"):
         """
@@ -291,7 +309,90 @@ class GridWorldDiscEnv(gym.Env):
 
         elif mode == "human":
             # Render using a GUI
-            pass
+
+            cell_size = 1/self._size
+            s2coord = lambda s: np.array(self._s2xy(s)) / self._size + \
+                                (cell_size/2, cell_size/2)
+
+            if self._fig is None:
+                self._fig = plt.figure()
+                self._ax = self._fig.gca()
+
+                # Render the goal patch(es)
+                self._goal_patches = []
+                for g in self._goal_states:
+                    goal_patch = mpatches.Rectangle(
+                        s2coord(g) - (cell_size/2, cell_size/2),
+                        1,
+                        1,
+                        color="green",
+                        ec=None
+                    )
+                    self._goal_patches.append(goal_patch)
+                    self._ax.add_patch(goal_patch)
+
+                # Render the current position
+                self._state_patch = mpatches.Circle(
+                    s2coord(self.state),
+                    0.025,
+                    color="blue",
+                    ec=None
+                )
+                self._ax.add_patch(self._state_patch)
+
+                # Render a grid
+                line_width = 0.75
+                line_color = "#dddddd"
+                for i in [x / self._size for x in range(self._size)]:
+                    self._ax.add_artist(plt.Line2D(
+                        (0, 1),
+                        (i, i),
+                        color=line_color,
+                        linewidth=line_width
+                    ))
+                    self._ax.add_artist(plt.Line2D(
+                        (i, i),
+                        (0, 1),
+                        color=line_color,
+                        linewidth=line_width
+                    ))
+
+                self._ax.set_title("Discrete GridWorld")
+                self._ax.set_aspect(1)
+
+                self._ax.set_xlim([0, 1])
+                self._ax.set_xticks(
+                    [s / self._size + cell_size/2 for s in range(self._size)]
+                )
+                self._ax.set_xticklabels(
+                   [str(s + 1) for s in range(self._size)]
+                )
+
+                self._ax.set_ylim([0, 1])
+                self._ax.set_yticks(
+                    [s / self._size + cell_size/2 for s in range(self._size)]
+                )
+                self._ax.set_yticklabels(
+                   [str(s + 1) for s in range(self._size)]
+                )
+                self._ax.xaxis.set_tick_params(size=0)
+                self._ax.yaxis.set_tick_params(size=0)
+
+
+            else:
+                # We assume a stationary goal
+                self._state_patch.center = np.array(s2coord(self.state))
+                self._fig.canvas.draw()
+
+            # Show the rendered GridWorld
+            if self._done():
+                # Plot and block
+                plt.show()
+            else:
+                # Plot without blocking
+                plt.pause(0.25)
+
+            return None
 
         else:
 
@@ -791,6 +892,7 @@ if __name__ == "__main__":
     print(t_ordered)
 
     print(gw.render(mode="ansi"))
+    gw.render(mode="human")
     reward = 0
     while True:
         action = policy(gw.state)
@@ -798,6 +900,7 @@ if __name__ == "__main__":
         s, r, done, status = gw.step(action)
         reward += r
         print(gw.render(mode="ansi"))
+        gw.render(mode="human")
 
         if done:
             break
