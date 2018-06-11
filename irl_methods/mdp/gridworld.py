@@ -1331,34 +1331,6 @@ class GridWorldCtsEnv(gym.Env):
 def demo():
     # Simple example of how to use these classes
 
-    gw_cts = GridWorldCtsEnv(edge_mode=EDGEMODE_WRAP)
-
-    trajs = [
-        [
-            (np.array((0.3, 0.95)), None),
-            (np.array((0.4, 0.05)), None),
-        ],
-        [
-            (np.array((0.5, 0.05)), None),
-            (np.array((0.6, 0.95)), None),
-        ],
-        [
-            (np.array((0.95, 0.3)), None),
-            (np.array((0.05, 0.4)), None),
-        ],
-        [
-            (np.array((0.05, 0.5)), None),
-            (np.array((0.95, 0.6)), None),
-        ],
-    ]
-
-    fig = plt.figure()
-    ax = fig.gca()
-    gw_cts.plot_trajectories(ax, trajs, alpha=1)
-    plt.show()
-
-    return
-
     # Exercise discrete gridworld
     print("Testing discrete GridWorld...")
     gw_disc = GridWorldDiscEnv(per_step_reward=-1)
@@ -1420,6 +1392,34 @@ def demo():
 
     gw_cts.close()
     print("Done, total reward = {}".format(reward))
+
+    # Test trajectory rendering on wrapping gridworlds
+    # gw_cts = GridWorldCtsEnv(edge_mode=EDGEMODE_WRAP)
+    # fig = plt.figure()
+    # ax = fig.gca()
+    # gw_cts.plot_trajectories(
+    #     ax,
+    #     [
+    #         [
+    #             (np.array((0.3, 0.95)), None),
+    #             (np.array((0.4, 0.05)), None),
+    #         ],
+    #         [
+    #             (np.array((0.5, 0.05)), None),
+    #             (np.array((0.6, 0.95)), None),
+    #         ],
+    #         [
+    #             (np.array((0.95, 0.3)), None),
+    #             (np.array((0.05, 0.4)), None),
+    #         ],
+    #         [
+    #             (np.array((0.05, 0.5)), None),
+    #             (np.array((0.95, 0.6)), None),
+    #         ],
+    #     ],
+    #     alpha=1
+    # )
+    # plt.show()
 
 
 if __name__ == "__main__":
