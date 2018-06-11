@@ -659,7 +659,7 @@ class GridWorldDiscEnv(gym.Env):
 
         return policy
 
-    def ordered_transition_tensor(self, policy):
+    def get_ordered_transition_tensor(self, policy):
         """Computes a sorted transition matrix for the GridWorld MDP
 
         Given a policy, defined as a function pi(s) -> a taking state
@@ -1265,7 +1265,7 @@ class GridWorldCtsEnv(gym.Env):
 
         return policy
 
-    def ordered_transition_function(self, policy):
+    def get_ordered_transition_function(self, policy):
         """Computes a sorted transition function for the GridWorld MDP
 
         Given a policy, defined as a function pi(s) -> a taking state
@@ -1326,7 +1326,7 @@ def demo():
     policy = gw_disc.get_optimal_policy()
 
     print("Ordered transition matrix:")
-    t_ordered = gw_disc.ordered_transition_tensor(policy)
+    t_ordered = gw_disc.get_ordered_transition_tensor(policy)
     print(t_ordered)
 
     # Choose a feature map to use
