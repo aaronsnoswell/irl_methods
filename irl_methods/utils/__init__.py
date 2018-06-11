@@ -9,7 +9,7 @@ Copyright 2018 Aaron Snoswell
 
 from .basis import gaussian, indicator
 from .dacadc import adc, dac
-from .mdp import make_gridworld
+from .transform import make_gridworld
 from .plot import plot_trajectory_4d
 
 __all__ = [
