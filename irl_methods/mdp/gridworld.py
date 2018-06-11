@@ -17,9 +17,13 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 
-# Edge mode static enum
-EDGE_MODE_CLAMP = 0
-EDGE_MODE_WRAP = 1
+# Edge mode enum
+EDGEMODE_CLAMP = 0
+EDGEMODE_WRAP = 1
+EDGEMODE_STRINGS = [
+    "Clamped",
+    "Wrapped"
+]
 
 # Syntax sugar helpers for actions
 ACTION_NORTH = 0
@@ -31,6 +35,18 @@ ACTION_STRINGS = [
     "East",
     "South",
     "West"
+]
+
+# Feature map enum
+FEATUREMAP_COORD = 0
+FEATUREMAP_IDENTITY = 1
+FEATUREMAP_OTHER_DISTANCE = 2
+FEATUREMAP_GOAL_DISTANCE = 3
+FEATUREMAP_STRINGS = [
+    "Coordinate",
+    "Identity",
+    "Other Distance",
+    "Goal Distance"
 ]
 
 
@@ -50,7 +66,7 @@ class GridWorldDiscEnv(gym.Env):
         *,
         size=5,
         wind=0.3,
-        edge_mode=EDGE_MODE_CLAMP,
+        edge_mode=EDGEMODE_CLAMP,
         initial_state=(0, 0),
         goal_states=((4, 4),),
         per_step_reward=0,
@@ -66,16 +82,16 @@ class GridWorldDiscEnv(gym.Env):
         @param size - The size of the grid world
         @param wind - The chance of a uniform random action being taken each
             step
-        @param edge_mode - Edge of world behaviour, one of EDGE_MODE_CLAMP or
-            EDGE_MODE_WRAP
+        @param edge_mode - Edge of world behaviour, one of EDGEMODE_CLAMP or
+            EDGEMODE_WRAP
         @param initial_state - Starting state as an (x, y) tuple for the agent
         @param goal_states - List of tuples of (x, y) goal states
         @param per_step_reward - Reward given every step
         @param goal_reward - Reward upon reaching the goal
         """
 
-        assert edge_mode == EDGE_MODE_WRAP \
-            or edge_mode == EDGE_MODE_CLAMP, \
+        assert edge_mode == EDGEMODE_WRAP \
+               or edge_mode == EDGEMODE_CLAMP, \
             "Invalid edge_mode: {}".format(edge_mode)
         
         # Size of the gridworld
@@ -95,10 +111,10 @@ class GridWorldDiscEnv(gym.Env):
         # Lambda to apply boundary condition to an x, y state
         self._apply_edge_mode = lambda x, y: (
                 min(max(x, 0), self._size - 1) if
-                (self._edge_mode == EDGE_MODE_CLAMP)
+                (self._edge_mode == EDGEMODE_CLAMP)
                 else x % size,
                 min(max(y, 0), self._size - 1) if
-                (self._edge_mode == EDGE_MODE_CLAMP)
+                (self._edge_mode == EDGEMODE_CLAMP)
                 else y % size,
             )
 
@@ -275,7 +291,7 @@ class GridWorldDiscEnv(gym.Env):
 
             ret = ""
 
-            edge_symbol = "#" if self._edge_mode == EDGE_MODE_CLAMP else "+"
+            edge_symbol = "#" if self._edge_mode == EDGEMODE_CLAMP else "+"
 
             # Add top boundary
             ret += edge_symbol * (self._size + 2) + "\n"
@@ -357,7 +373,12 @@ class GridWorldDiscEnv(gym.Env):
                         linewidth=line_width
                     ))
 
-                self._ax.set_title("Discrete GridWorld")
+                self._ax.set_title(
+                    "Discrete {} GridWorld, wind = {}".format(
+                        EDGEMODE_STRINGS[self._edge_mode],
+                        self._wind
+                    )
+                )
                 self._ax.set_aspect(1)
 
                 self._ax.set_xlim([0, 1])
@@ -377,7 +398,6 @@ class GridWorldDiscEnv(gym.Env):
                 )
                 self._ax.xaxis.set_tick_params(size=0)
                 self._ax.yaxis.set_tick_params(size=0)
-
 
             else:
                 # We assume a stationary goal
@@ -399,13 +419,13 @@ class GridWorldDiscEnv(gym.Env):
             # Let super handle it
             super(GridWorldDiscEnv, self).render(mode=mode)
 
-    def get_state_features(self, *, s=None, feature_map="coordinate"):
+    def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
         """Returns a feature vector for the given state
 
         Args:
             s (int): State integer, or None to use the current state
-            feature_map (string): Feature map to use. One of "coordinate",
-                "identity", "other_distance" or "goal_distance".
+            feature_map (int): Feature map to use. One of FEATURE_MAP_*
+                defined at the top of this module
 
         Returns:
             (numpy array): Feature vector for the given state
@@ -413,18 +433,18 @@ class GridWorldDiscEnv(gym.Env):
 
         s = s or self.state
 
-        if feature_map == "coordinate":
+        if feature_map == FEATUREMAP_COORD:
             # Features are (x, y) coordinate tuples
             return np.array(self._s2xy(s))
 
-        elif feature_map == "identity":
+        elif feature_map == FEATUREMAP_IDENTITY:
             # Features are zero arrays with a 1 indicating the location of
             # the state
             f = np.zeros(len(self._S))
             f[s] = 1
             return f
 
-        elif feature_map == "other_distance":
+        elif feature_map == FEATUREMAP_OTHER_DISTANCE:
             # Features are an array indicating the L0 / manhattan distance to
             # each other state
             f = np.zeros(len(self._S))
@@ -434,7 +454,7 @@ class GridWorldDiscEnv(gym.Env):
                 f[other_state] = abs(x0 - x) + abs(y0 - y)
             return f
 
-        else:
+        elif feature_map == FEATUREMAP_GOAL_DISTANCE:
             # Features are an array indicating the L0 / manhattan distance to
             # each goal
             f = np.zeros(len(self._goal_states))
@@ -443,6 +463,9 @@ class GridWorldDiscEnv(gym.Env):
                 x, y = self._s2xy(goal_state)
                 f[i] = abs(x0 - x) + abs(y0 - y)
             return f
+
+        else:
+            assert False, "Invalid feature map: {}".format(feature_map)
 
     def order_transition_matrix(self, policy):
         """Computes a sorted transition matrix for the GridWorld MDP
@@ -536,7 +559,7 @@ class GridWorldDiscEnv(gym.Env):
 
         # If we're in a wrapping gridworld, the nearest goal could outside the
         # world bounds. Add virtual goals to help the policy account for this
-        if self._edge_mode == EDGE_MODE_WRAP:
+        if self._edge_mode == EDGEMODE_WRAP:
             for i in range(len(self._goal_states)):
                 g = np.array(self._s2xy(self._goal_states[i]))
                 _goal_states.append(tuple(g - (self._size, self._size)))
@@ -642,7 +665,7 @@ class GridWorldCtsEnv(gym.Env):
             *,
             action_distance=0.2,
             wind_range=0.1,
-            edge_mode=EDGE_MODE_CLAMP,
+            edge_mode=EDGEMODE_CLAMP,
             initial_state=(0.1, 0.1),
             goal_range=((0.8, 0.8), (1, 1)),
             per_step_reward=0,
@@ -655,8 +678,8 @@ class GridWorldCtsEnv(gym.Env):
         +y is up.
         """
 
-        assert edge_mode == EDGE_MODE_WRAP \
-            or edge_mode == EDGE_MODE_CLAMP, \
+        assert edge_mode == EDGEMODE_WRAP \
+               or edge_mode == EDGEMODE_CLAMP, \
             "Invalid edge_mode: {}".format(edge_mode)
 
         # How far one step takes the agent
@@ -763,7 +786,7 @@ class GridWorldCtsEnv(gym.Env):
         )
 
         # Apply boundary condition
-        if self._edge_mode == EDGE_MODE_WRAP:
+        if self._edge_mode == EDGEMODE_WRAP:
             self.state = tuple(new_state % 1.0)
 
         else:
@@ -822,7 +845,12 @@ class GridWorldCtsEnv(gym.Env):
                 )
                 self._ax.add_patch(self._state_patch)
 
-                self._ax.set_title("Continuous GridWorld")
+                self._ax.set_title(
+                    "Continuous {} GridWorld, wind={}".format(
+                        EDGEMODE_STRINGS[self._edge_mode],
+                        self._wind_range
+                    )
+                )
                 self._ax.set_aspect(1)
                 self._ax.set_xlim([0, 1])
                 self._ax.set_ylim([0, 1])
@@ -849,14 +877,14 @@ class GridWorldCtsEnv(gym.Env):
             # Let super handle it
             super(GridWorldCtsEnv, self).render(mode=mode)
 
-    def get_state_features(self, *, s=None, feature_map="coordinate"):
+    def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
         """Returns a feature vector for the given state
 
         Args:
             s (numpy array): State as a numpy array, or None to use the
                 current state
-            feature_map (string): Feature map to use. One of "coordinate" or
-                "goal_distance".
+            feature_map (string): Feature map to use. One of
+                FEATUREMAP_COORD or FEATUREMAP_GOAL_DISTANCE
 
         Returns:
             (numpy array): Feature vector for the given state
@@ -864,15 +892,18 @@ class GridWorldCtsEnv(gym.Env):
 
         s = s or self.state
 
-        if feature_map == "coordinate":
+        if feature_map == FEATUREMAP_COORD:
             # Features are (x, y) coordinate tuples
             return np.array(s)
 
-        else:
+        elif feature_map == FEATUREMAP_GOAL_DISTANCE:
             # Feature is a value indicating the distance to the goal
             return np.linalg.norm(
                 self._goal_space.low + self._goal_space.high - s
             )
+
+        else:
+            assert False, "Invalid feature map: {}".format(feature_map)
 
     def get_optimal_policy(self):
         """Returns an optimal policy function for this MDP
@@ -895,7 +926,7 @@ class GridWorldCtsEnv(gym.Env):
 
         # If we're in a wrapping gridworld, the nearest goal could outside the
         # world bounds. Add virtual goals to help the policy account for this
-        if self._edge_mode == EDGE_MODE_WRAP:
+        if self._edge_mode == EDGEMODE_WRAP:
             goal_positions.append(
                 goal_positions[0] - (1, 1)
             )
@@ -958,8 +989,13 @@ if __name__ == "__main__":
     gw_disc = GridWorldDiscEnv(per_step_reward=-1)
     policy = gw_disc.get_optimal_policy()
 
+    print("Ordered transition matrix:")
     t_ordered = gw_disc.order_transition_matrix(policy)
     print(t_ordered)
+
+    # Choose a feature map to use
+    feature_map = FEATUREMAP_COORD
+    print("Using feature map {}".format(FEATUREMAP_STRINGS[feature_map]))
 
     print(gw_disc.render(mode="ansi"))
     gw_disc.render(mode="human")
@@ -967,7 +1003,7 @@ if __name__ == "__main__":
     while True:
         action = policy(gw_disc.state)
         print("Observed f={}, taking action a={}".format(
-            gw_disc.get_state_features(feature_map="coordinate"),
+            gw_disc.get_state_features(feature_map=feature_map),
             ACTION_STRINGS[action]
         ))
         s, r, done, status = gw_disc.step(action)
@@ -979,7 +1015,7 @@ if __name__ == "__main__":
         if done:
             break
 
-        gw_disc.close()
+    gw_disc.close()
     print("Done, total reward = {}".format(reward))
 
     # Exercise cts gridworld
@@ -987,12 +1023,16 @@ if __name__ == "__main__":
     gw_cts = GridWorldCtsEnv(per_step_reward=-1)
     policy = gw_cts.get_optimal_policy()
 
+    # Choose a feature map to use
+    feature_map = FEATUREMAP_COORD
+    print("Using feature map {}".format(FEATUREMAP_STRINGS[feature_map]))
+
     gw_cts.render()
     reward = 0
     while True:
         action = policy(gw_cts.state)
         print("Observed f={}, taking action a={}".format(
-            gw_cts.get_state_features(),
+            gw_cts.get_state_features(feature_map=feature_map),
             ACTION_STRINGS[action]
         ))
         s, r, done, status = gw_cts.step(action)
