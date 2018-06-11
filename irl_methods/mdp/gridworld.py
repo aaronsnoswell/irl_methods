@@ -1061,6 +1061,9 @@ class GridWorldCtsEnv(gym.Env):
     def plot_trajectories(self, ax, trajectories, *, line_width=0.3, alpha=0.3):
         """Plots a collection of (s, a) trajectories
 
+        TODO ajs 11/Jun/2018 Draw border intercept points when a trajectory
+        crosses the x=0, x=1, y=0 or y=1 lines
+
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
             trajectories (list): List of (s, a) trajectories
