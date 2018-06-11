@@ -1058,7 +1058,7 @@ class GridWorldCtsEnv(gym.Env):
             linewidth=0.25
         )
 
-    def plot_trajectories(self, ax, trajectories, *, line_width=0.2, alpha=0.2):
+    def plot_trajectories(self, ax, trajectories, *, line_width=0.3, alpha=0.3):
         """Plots a collection of (s, a) trajectories
 
         Args:
@@ -1084,8 +1084,7 @@ class GridWorldCtsEnv(gym.Env):
 
             # Determine if this trajectory was successful or not
             success = self._goal_space.contains(state_trajectory[-1])
-            color = "b" if success else "r"
-            color += "-"
+            color = "C0" if success else "r"
 
             # Slice the trajectory up into chunks whenever it goes off the
             # edge of a wrapping gridworld
@@ -1125,45 +1124,6 @@ class GridWorldCtsEnv(gym.Env):
                         chunks.append(current_chunk)
                         current_chunk = []
 
-                        # if abs(delta[0]) > abs(delta[1]):
-                        #     if delta[0] < 0:
-                        #         # Trajectory went off right edge of map
-                        #         x1, y1 = s1 - (1, 0)
-                        #         grad = (y1 - y0) / (x1 - x0)
-                        #         y_intercept = y1 - grad * x1
-                        #         current_chunk.append(np.array((1, y_intercept)))
-                        #         chunks.append(current_chunk)
-                        #         current_chunk = [np.array((0, y_intercept))]
-                        #     else:
-                        #         # Trajectory went off left edge of map
-                        #         x1, y1 = s1 - (1, 0)
-                        #         grad = (y1 - y0) / (x1 - x0)
-                        #         y_intercept = y1 - grad * x1
-                        #         current_chunk.append(np.array((0, y_intercept)))
-                        #         chunks.append(current_chunk)
-                        #         current_chunk = [np.array((1, y_intercept))]
-                        # else:
-                        #     if delta[1] > 0:
-                        #         # Trajectory went off bottom of map
-                        #         x1, y1 = s1 - (0, 1)
-                        #         x_intercept = x0
-                        #         if x1 - x0 != 0:
-                        #             grad = (y1 - y0) / (x1 - x0)
-                        #             x_intercept = x1 - y1 / grad
-                        #         current_chunk.append(np.array((x_intercept, 0)))
-                        #         chunks.append(current_chunk)
-                        #         current_chunk = [np.array((x_intercept, 1))]
-                        #     else:
-                        #         # Trajectory went off top of map
-                        #         x1, y1 = s1 - (0, 1)
-                        #         x_intercept = x0
-                        #         if x1 - x0 != 0:
-                        #             grad = (y1 - y0) / (x1 - x0)
-                        #             x_intercept = x1 - y1 / grad
-                        #         current_chunk.append(np.array((x_intercept, 1)))
-                        #         chunks.append(current_chunk)
-                        #         current_chunk = [np.array((x_intercept, 0))]
-
                 # Add the final state and final chunk
                 current_chunk.append(state_trajectory[-1])
                 chunks.append(current_chunk)
@@ -1177,10 +1137,18 @@ class GridWorldCtsEnv(gym.Env):
                 plt.plot(
                     np.array(chunk)[:, 0],
                     np.array(chunk)[:, 1],
-                    color,
+                    color + "-",
                     linewidth=line_width,
                     alpha=alpha
                 )
+
+            # Highlight start point
+            plt.plot(
+                state_trajectory[0][0],
+                state_trajectory[0][1],
+                color + ".",
+                alpha=alpha
+            )
 
     def get_state_features(self, *, s=None, feature_map=FEATUREMAP_COORD):
         """Returns a feature vector for the given state

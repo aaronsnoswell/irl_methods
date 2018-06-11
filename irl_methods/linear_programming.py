@@ -700,7 +700,7 @@ if __name__ == "__main__":
         goal_states=[goal_state],
         per_step_reward=0,
         goal_reward=1,
-        edge_mode=EDGEMODE_CLAMP
+        edge_mode=EDGEMODE_WRAP
     )
     disc_optimal_policy = gw_disc.get_optimal_policy()
     sorted_transition_tensor = gw_disc.ordered_transition_tensor(
@@ -721,10 +721,13 @@ if __name__ == "__main__":
 
     # Construct a toy continuous gridworld with some randomized parameters to
     # show variance in the methods
-    initial_state = ((goal_state / size) + 0.5) % 1.0 +\
+    initial_state = (
+        (goal_state / size) +
+        0.5 +
         np.random.uniform(0, 0.25, 2)
-    step_size = np.random.uniform(0.001, 0.05)
-    wind_size = np.random.uniform(0.01, 0.1)
+        ) % 1.0
+    step_size = np.random.uniform(0.01, cell_size*0.5)
+    wind_size = step_size * np.random.uniform(1.5, 1.75)
     gw_cts = GridWorldCtsEnv(
         action_distance=step_size,
         wind_range=wind_size,
@@ -732,7 +735,7 @@ if __name__ == "__main__":
         goal_range=[goal_state / size, goal_state / size + cell_size],
         per_step_reward=0,
         goal_reward=1,
-        edge_mode=EDGEMODE_CLAMP
+        edge_mode=EDGEMODE_WRAP
     )
     cts_optimal_policy = gw_cts.get_optimal_policy()
     ordered_transition_function = gw_cts.ordered_transition_function(
@@ -745,7 +748,7 @@ if __name__ == "__main__":
         for y in range(size)
         for x in range(size)
     ]
-    sigma = 0.125
+    sigma = cell_size/2
     covariance_matrix = np.diag((sigma, sigma))
     basis_functions = [
         gaussian(mu, covariance_matrix)
@@ -781,13 +784,12 @@ if __name__ == "__main__":
     # ========= TLP IRL
 
     # Roll-out some expert trajectories
-    num_trajectories = num_samples
     max_trajectory_length = (0.5 / step_size) * 2
     trajectories = []
-    for i in range(num_trajectories):
+    for trajectory_start_state in state_sample:
         trajectory, _ = rollout(
             gw_cts,
-            initial_state,
+            trajectory_start_state,
             cts_optimal_policy,
             max_length=max_trajectory_length
         )
@@ -845,17 +847,35 @@ if __name__ == "__main__":
 
     # Plot provided policy and state sample
     plt.sca(grid[4])
+    # Draw policy, sampled on a grid
     gw_cts.plot_policy(
         grid[4],
         cts_optimal_policy,
         resolution=size
     )
-    plt.scatter(
+
+    # Draw sample points
+    plt.plot(
         state_sample[:, 0],
         state_sample[:, 1],
-        s=10,
+        "C0.",
         alpha=0.3
     )
+
+    # Draw 2*sigma rings for basis functions
+    for basis_mean in basis_function_means:
+        grid[4].add_artist(
+            plt.Circle(
+                basis_mean,
+                2*sigma,
+                color='black',
+                fill=False,
+                clip_on=False,
+                linewidth=0.1,
+                alpha=0.4
+            )
+        )
+
     plt.title("Provided policy", fontsize=font_size)
 
     # Plot recovered reward
@@ -887,7 +907,21 @@ if __name__ == "__main__":
     # Plot provided trajectories
     plt.sca(grid[7])
     gw_cts.plot_trajectories(grid[7], trajectories)
-    plt.plot(initial_state[0], initial_state[1], 'b.')
+
+    # Draw 2*sigma rings for basis functions
+    for basis_mean in basis_function_means:
+        grid[7].add_artist(
+            plt.Circle(
+                basis_mean,
+                2*sigma,
+                color='black',
+                fill=False,
+                clip_on=False,
+                linewidth=0.1,
+                alpha=0.4
+            )
+        )
+
     plt.title("Provided trajectories", fontsize=font_size)
     plt.xticks([])
 
