@@ -680,12 +680,15 @@ if __name__ == "__main__":
     # Demonstrate these methods on some gridworld problems
     import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1 import ImageGrid
-    from irl_methods.utils import gaussian, indicator
+    from irl_methods.utils import gaussian, indicator, rollout
     from irl_methods.mdp.gridworld import (
         GridWorldDiscEnv,
         GridWorldCtsEnv,
-        EDGEMODE_WRAP
+        EDGEMODE_WRAP,
+        EDGEMODE_CLAMP
     )
+
+    # ========= LP IRL
 
     # Construct a toy discrete gridworld with some randomized parameters to show
     # variance in the methods
@@ -697,7 +700,7 @@ if __name__ == "__main__":
         goal_states=[goal_state],
         per_step_reward=0,
         goal_reward=1,
-        edge_mode=EDGEMODE_WRAP
+        edge_mode=EDGEMODE_CLAMP
     )
     disc_optimal_policy = gw_disc.get_optimal_policy()
     sorted_transition_tensor = gw_disc.ordered_transition_tensor(
@@ -714,15 +717,20 @@ if __name__ == "__main__":
         verbose=True
     )
 
+    # ========= LLP IRL
+
     # Construct a toy continuous gridworld with some randomized parameters to
     # show variance in the methods
-    initial_state = np.random.uniform(0, 1, 2)
+    initial_state = ((goal_state / size) + 0.5) % 1.0 +\
+        np.random.uniform(0, 0.25, 2)
     gw_cts = GridWorldCtsEnv(
-        initial_state=(0, 0),
+        action_distance=np.random.uniform(0.001, 0.05),
+        wind_range=np.random.uniform(0.001, 0.1),
+        initial_state=initial_state,
         goal_range=[goal_state / size, goal_state / size + cell_size],
         per_step_reward=0,
         goal_reward=1,
-        edge_mode=EDGEMODE_WRAP
+        edge_mode=EDGEMODE_CLAMP
     )
     cts_optimal_policy = gw_cts.get_optimal_policy()
     ordered_transition_function = gw_cts.ordered_transition_function(
@@ -767,6 +775,21 @@ if __name__ == "__main__":
         alpha_vector,
         [fn(s) for fn in basis_functions]
     )[0]
+
+    # ========= TLP IRL
+
+    # Roll-out some expert trajectories
+    num_trajectories = num_samples
+    max_trajectory_length = size * 3
+    trajectories = []
+    for i in range(num_trajectories):
+        trajectory, _ = rollout(
+            gw_cts,
+            initial_state,
+            cts_optimal_policy,
+            max_length=max_trajectory_length
+        )
+        trajectories.append(trajectory)
 
     # Make a new figure
     fig = plt.figure()
@@ -861,7 +884,17 @@ if __name__ == "__main__":
 
     # Plot provided trajectories
     plt.sca(grid[7])
-    #gw_cts.plot_policy(grid[7], cts_optimal_policy)
+    gw_cts.configure_plot(grid[7])
+    for trajectory in trajectories:
+        state_trajectory = np.array([sa[0] for sa in trajectory])
+        plt.plot(
+            state_trajectory[:, 0],
+            state_trajectory[:, 1],
+            'b-',
+            linewidth=0.2,
+            alpha=0.2
+        )
+    plt.plot(initial_state[0], initial_state[1], 'b.')
     plt.title("Provided trajectories", fontsize=font_size)
     plt.xticks([])
 
