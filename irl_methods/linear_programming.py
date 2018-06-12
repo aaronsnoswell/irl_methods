@@ -275,6 +275,12 @@ def large_linear_programming(
         (dict): A result object from the LP optimiser
     """
 
+    # Enforce valid penalty function coefficient
+    assert penalty_coefficient >= 1, \
+        "Penalty function coefficient must be >= 1, was {}".format(
+            penalty_coefficient
+        )
+
     # Measure number of sampled states
     num_states = len(state_sample)
 
@@ -284,8 +290,8 @@ def large_linear_programming(
     if verbose:
         print("Large Linear Programming IRL")
         print(
-            "num_states={:d}, num_actions={:d}, num_basis_functions={:d}, "
-            "penalty_coefficient={:.3f}, num_transition_samples={:d}".format(
+            "num_states={}, num_actions={}, num_basis_functions={}, "
+            "penalty_coefficient={:.3f}, num_transition_samples={}".format(
                 num_states,
                 num_actions,
                 num_basis_functions,
@@ -294,15 +300,9 @@ def large_linear_programming(
             )
         )
 
-    # Enforce valid penalty function coefficient
-    assert penalty_coefficient >= 1, \
-        "Penalty function coefficient must be >= 1, was {}".format(
-            penalty_coefficient
-        )
-
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
-    # c, A_ub, b_ub = f(c, A_ub, b_ub)
+    # c, A_ub, b_ub = f(c, a_ub, b_ub)
     if verbose:
         print("Composing LP problem...")
 
@@ -882,9 +882,8 @@ def demo():
     num_transition_samples = 100
 
     # Penalty coefficient to use in LLP/TLP
-    # Min value is 1
+    # Min value is 1, Ng and Russell suggest 2
     penalty_coefficient = 10
-    # penalty_coefficient = np.random.uniform(1, 5, 1)
 
     # ===
 
