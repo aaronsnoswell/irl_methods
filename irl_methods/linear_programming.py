@@ -757,8 +757,12 @@ def demo():
         GridWorldCtsEnv,
         EDGEMODE_WRAP,
         EDGEMODE_CLAMP,
-        EDGEMODE_STRINGS
+        EDGEMODE_STRINGS,
+        ACTION_STRINGS
     )
+
+    # Truncate numpy float decimal points
+    np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
 
     # === GridWorld parameters
     # #################################################################
@@ -776,20 +780,20 @@ def demo():
     wind_strength = (1.5 / size) * wind_prob
 
     # Edge mode for the gridworlds
-    # edge_mode = EDGEMODE_CLAMP
-    edge_mode = EDGEMODE_WRAP
+    edge_mode = EDGEMODE_CLAMP
+    # edge_mode = EDGEMODE_WRAP
 
     # Goal state
-    # goal_state = np.array((size-1, size-1), dtype=int)
-    goal_state = np.random.randint(0, size, 2)
+    goal_state = np.array((size-1, size-1), dtype=int)
+    # goal_state = np.random.randint(0, size, 2)
 
     # Discount factor
-    # discount_factor = 0.9
-    discount_factor = np.random.uniform(0, 1)
+    discount_factor = 0.9
+    # discount_factor = np.random.uniform(0, 1)
 
     # Step size for the continuous gridworld
-    # step_size = 0.1
-    step_size = np.random.uniform((1 / size) * 0.01, (1 / size) * 0.5)
+    step_size = 0.1
+    # step_size = np.random.uniform((1 / size) * 0.01, (1 / size) * 0.5)
 
     # === Solver parameters
     # #################################################################
@@ -914,9 +918,34 @@ def demo():
                 transition_samples=num_transition_samples
             )
         )
+    # A vector function that computes the value vector given a state
+    basis_vector_fn = lambda s: [bvf(s) for bvf in basis_value_functions]
 
     # *twitch*
     print("100%")
+
+
+    # Given some initial state
+    s0 = np.array((0.3, 0.3))
+
+    # Compute the value-expectations for the possible actions
+    a_ve = np.zeros((num_bfs, num_actions))
+    expectation_samples = 100
+    for i in range(expectation_samples):
+        for a in range(num_actions):
+            a_ve[:, a] += basis_vector_fn(
+                ordered_transition_function(s0, a)
+            )
+
+    # Normalize expectations
+    a_ve /= expectation_samples
+
+    # Find the difference w.r.t the expert (0th action)
+    a_ve_diff = np.subtract(np.array([a_ve[:, 0]]).T, a_ve[:, 1:])
+
+    #penalty_coefficient * a_ve_diff
+
+
 
     # Compute the value matrix - the (i, j)th component represents the value of
     #  the jth state under the ith basis function
@@ -946,6 +975,9 @@ def demo():
     #     alpha_vector,
     #     [fn(s) for fn in basis_functions]
     # )[0]
+
+
+    return
 
     # ========= TLP IRL
     #################################################################
