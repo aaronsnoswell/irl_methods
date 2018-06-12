@@ -731,40 +731,127 @@ def trajectory_linear_programming(
     return alpha, result
 
 
-if __name__ == "__main__":
+def demo():
+    """ Demonstrate these methods on some gridworld problems
+    """
 
-    # Demonstrate these methods on some gridworld problems
+    # Get some imports
     import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1 import ImageGrid
-    from irl_methods.utils import gaussian, indicator, rollout
+    from irl_methods.utils import gaussian, rollout
     from irl_methods.mdp.gridworld import (
         GridWorldDiscEnv,
         GridWorldCtsEnv,
         EDGEMODE_WRAP,
-        EDGEMODE_CLAMP
+        EDGEMODE_CLAMP,
+        EDGEMODE_STRINGS
     )
 
-    # ========= LP IRL
+    # === GridWorld parameters
+    # #################################################################
+    # Play around with these values to see what effects they have
 
-    # Construct a toy discrete gridworld with some randomized parameters to show
-    # variance in the methods
-    size = 2
-    cell_size = 1 / size
+    # Size of the discrete gridworld
+    size = 8
+
+    # Wind probability for the discrete gridworld
+    wind_prob = 0.3
+    # wind_prob = np.random.uniform(0, 0.9)
+    wind_prob = 0
+
+    # Wind strength for the continuous gridworld
+    wind_strength = (1.5 / size) * wind_prob
+
+    # Edge mode for the gridworlds
+    # edge_mode = EDGEMODE_CLAMP
+    edge_mode = EDGEMODE_WRAP
+
+    # Goal state
+    # goal_state = np.array((size-1, size-1), dtype=int)
     goal_state = np.random.randint(0, size, 2)
-    goal_state = np.array((1, 1), dtype=int)
+
+    # Discount factor
+    # discount_factor = 0.9
+    discount_factor = np.random.uniform(0, 1)
+
+    # Step size for the continuous gridworld
+    # step_size = 0.1
+    step_size = np.random.uniform((1 / size) * 0.01, (1 / size) * 0.5)
+
+    # === Solver parameters
+    # #################################################################
+
+    # Vanilla Linear Programming L1 regularisation weight
+    # l1 = 0
+    l1 = np.random.uniform(0, 1)
+
+    # Size of the gaussian basis function grid
+    bf_size = 3
+
+    # Covariance of the basis functions
+    sigma = (1/bf_size)*0.5
+
+    # Number of state/trajectory samples to use for LLP/TLP
+    num_samples = 100
+
+    # Number of transition samples to use when estimating values in LLP
+    num_transition_samples = 100
+
+    # Penalty coefficient to use in LLP/TLP
+    # penalty_coefficient = 1
+    penalty_coefficient = np.random.uniform(1, 5, 1)
+
+    # Maximum trajectory length to use for TLP
+    max_trajectory_length = (0.5 / step_size) * 2
+
+    # === End of parameters - Touching the below lines may break the demos :)
+    # #################################################################
+
+    # Construct the gridworlds
+    print("Discrete GridWorld, "
+        "size={:d}, wind_prob={:.3f}%, edge_mode={}".format(
+            size,
+            wind_prob,
+            EDGEMODE_STRINGS[edge_mode]
+        )
+    )
     gw_disc = GridWorldDiscEnv(
         size=size,
+        wind=wind_prob,
         goal_states=[goal_state],
         per_step_reward=0,
         goal_reward=1,
-        edge_mode=EDGEMODE_WRAP
+        edge_mode=edge_mode
     )
     disc_optimal_policy = gw_disc.get_optimal_policy()
     sorted_transition_tensor = gw_disc.get_ordered_transition_tensor(
         disc_optimal_policy
     )
-    discount_factor = np.random.uniform(0, 1)
-    l1 = np.random.uniform(0, 1)
+
+    cell_size = 1 / size
+    print(
+        "Continuous GridWorld, "
+        "step_size={:.3f}, wind_strength={:.3f}, edge_mode={}".format(
+            step_size,
+            wind_strength,
+            EDGEMODE_STRINGS[edge_mode]
+        )
+    )
+    gw_cts = GridWorldCtsEnv(
+        action_distance=step_size,
+        wind_range=wind_strength,
+        goal_range=[goal_state / size, goal_state / size + cell_size],
+        per_step_reward=0,
+        goal_reward=1,
+        edge_mode=edge_mode
+    )
+    cts_optimal_policy = gw_cts.get_optimal_policy()
+    ordered_transition_function = gw_cts.get_ordered_transition_function(
+        cts_optimal_policy
+    )
+
+    # ========= Vanilla LP IRL
+    # #################################################################
 
     # Run LP IRL
     lp_reward, _ = linear_programming(
@@ -775,81 +862,87 @@ if __name__ == "__main__":
     )
 
     # ========= LLP IRL
-
-    # Construct a toy continuous gridworld with some randomized parameters to
-    # show variance in the methods
-    initial_state = (
-        (goal_state / size) +
-        0.5 +
-        np.random.uniform(0, 0.25, 2)
-        ) % 1.0
-    initial_state = np.array((0.25, 0.25))
-    step_size = np.random.uniform(cell_size*0.01, cell_size*0.5)
-    wind_size = step_size * np.random.uniform(1.5, 1.75)
-    gw_cts = GridWorldCtsEnv(
-        action_distance=step_size,
-        wind_range=wind_size,
-        initial_state=initial_state,
-        goal_range=[goal_state / size, goal_state / size + cell_size],
-        per_step_reward=0,
-        goal_reward=1,
-        edge_mode=EDGEMODE_WRAP
-    )
-    cts_optimal_policy = gw_cts.get_optimal_policy()
-    ordered_transition_function = gw_cts.get_ordered_transition_function(
-        cts_optimal_policy
-    )
-
-    # Define a set of basis functions
-    basis_function_means = [
-        (x/size + cell_size/2, y/size + cell_size/2)
-        for y in range(size)
-        for x in range(size)
-    ]
-    sigma = cell_size/2
-    covariance_matrix = np.diag((sigma, sigma))
-    basis_functions = [
-        gaussian(mu, covariance_matrix)
-        for mu in basis_function_means
-    ]
-    # basis_functions = [
-    #     indicator(mu, np.array((cell_size, cell_size)))
-    #     for mu in basis_function_means
-    # ]
+    # #################################################################
 
     # Run LP IRL for large state spaces
-    num_samples = 100
     state_sample = np.random.uniform(0, 1, (num_samples, 2))
-    num_samples = 4
-    state_sample = np.array([
-        [0.25, 0.25],
-        [0.75, 0.25],
-        [0.25, 0.75],
-        [0.75, 0.75],
-    ])
-    num_actions = len(gw_cts._A)
-    num_transition_samples = 100
-    penalty_coefficient = np.random.uniform(1, 5, 1)
-    alpha_vector, _ = large_linear_programming(
-        state_sample,
-        num_actions,
-        ordered_transition_function,
-        basis_functions,
-        verbose=True,
-        num_transition_samples=num_transition_samples,
-        penalty_coefficient=penalty_coefficient
-    )
 
-    # Compose reward function lambda
-    cts_reward = lambda s: np.dot(
-        alpha_vector,
-        [fn(s) for fn in basis_functions]
-    )[0]
+    # num_samples = 4
+    # state_sample = np.array([
+    #    [0.25, 0.25],
+    #    [0.75, 0.25],
+    #    [0.25, 0.75],
+    #    [0.75, 0.75],
+    # ])
+
+    num_actions = len(gw_cts._A)
+
+    # Define a set of basis functions
+    bf_means = [
+        (
+            x/bf_size + (1/bf_size)*0.5,
+            y/bf_size + (1/bf_size)*0.5
+        )
+        for y in range(bf_size)
+        for x in range(bf_size)
+    ]
+    bfs = [
+        gaussian(mu, np.diag((sigma, sigma))) for mu in bf_means
+    ]
+    num_bfs = len(bfs)
+
+    # Convert basis functions to value functions
+    print("Computing value estimates...")
+    basis_value_functions = []
+    for bfi, bf in enumerate(bfs):
+        print("{:d}%".format(int(bfi/num_bfs*100)))
+
+        basis_value_functions.append(
+            gw_cts.estimate_value(
+                cts_optimal_policy,
+                discount_factor,
+                reward=bf,
+                resolution=size,
+                transition_samples=num_transition_samples
+            )
+        )
+
+    # *twitch*
+    print("100%")
+
+    # Compute the value matrix - the (i, j)th component represents the value of
+    #  the jth state under the ith basis function
+    values = np.zeros((num_bfs, num_samples))
+    for bi, bvf in enumerate(basis_value_functions):
+        for si, state in enumerate(state_sample):
+            values[bi, si] = bvf(state)
+
+    # Build matrix of features for each sampled state
+    feature_matrix = np.zeros((num_samples, num_bfs))
+    for si, state in enumerate(state_sample):
+        for fi, basis_function in enumerate(bfs):
+            feature_matrix[si, fi] = basis_function(state)
+
+    # alpha_vector, _ = large_linear_programming(
+    #     state_sample,
+    #     num_actions,
+    #     ordered_transition_function,
+    #     basis_functions,
+    #     verbose=True,
+    #     num_transition_samples=num_transition_samples,
+    #     penalty_coefficient=penalty_coefficient
+    # )
+    #
+    # # Compose reward function lambda
+    # cts_reward = lambda s: np.dot(
+    #     alpha_vector,
+    #     [fn(s) for fn in basis_functions]
+    # )[0]
 
     # ========= TLP IRL
+    #################################################################
 
     # Roll-out some expert trajectories
-    max_trajectory_length = (0.5 / step_size) * 2
     trajectories = []
     for trajectory_start_state in state_sample:
         trajectory, _ = rollout(
@@ -859,6 +952,11 @@ if __name__ == "__main__":
             max_length=max_trajectory_length
         )
         trajectories.append(trajectory)
+
+    # Run TLP
+
+    # ========= Plot the results
+    #################################################################
 
     # Make a new figure
     fig = plt.figure()
@@ -896,7 +994,7 @@ if __name__ == "__main__":
     gw_disc.plot_reward(grid[2], lp_reward, r_min=0, r_max=1)
     plt.title("LP IRL result", fontsize=font_size)
 
-    # ========= LP IRL for large state spaces
+    # ========= LLP IRL
 
     # Plot ground truth reward
     plt.sca(grid[3])
@@ -912,6 +1010,7 @@ if __name__ == "__main__":
 
     # Plot provided policy and state sample
     plt.sca(grid[4])
+
     # Draw policy, sampled on a grid
     gw_cts.plot_policy(
         grid[4],
@@ -928,7 +1027,7 @@ if __name__ == "__main__":
     )
 
     # Draw 2*sigma rings for basis functions
-    for basis_mean in basis_function_means:
+    for basis_mean in bf_means:
         grid[4].add_artist(
             plt.Circle(
                 basis_mean,
@@ -943,58 +1042,58 @@ if __name__ == "__main__":
 
     plt.title("Provided policy", fontsize=font_size)
 
-    # Plot recovered reward
-    plt.sca(grid[5])
-    gw_cts.plot_reward(
-        grid[5],
-        cts_reward,
-        0,
-        1,
-        resolution=100
-    )
-    plt.title("LLP IRL result", fontsize=font_size)
-
-    # ========= LP IRL with trajectories
-
-    # Plot ground truth reward
-    plt.sca(grid[6])
-    gw_cts.plot_reward(
-        grid[6],
-        gw_cts.ground_truth_reward,
-        0,
-        1,
-        resolution=size
-    )
-    plt.title("Ground truth reward", fontsize=font_size)
-    plt.xticks([])
-    plt.yticks([])
-
-    # Plot provided trajectories
-    plt.sca(grid[7])
-    gw_cts.plot_trajectories(grid[7], trajectories)
-
-    # Draw 2*sigma rings for basis functions
-    for basis_mean in basis_function_means:
-        grid[7].add_artist(
-            plt.Circle(
-                basis_mean,
-                2*sigma,
-                color='black',
-                fill=False,
-                clip_on=False,
-                linewidth=0.1,
-                alpha=0.4
-            )
-        )
-
-    plt.title("Provided trajectories", fontsize=font_size)
-    plt.xticks([])
-
-    # Plot recovered reward
-    plt.sca(grid[8])
-    #gw_cts.plot_policy(grid[8], cts_optimal_policy)
-    plt.title("TLP IRL result", fontsize=font_size)
-    plt.xticks([])
+    # # Plot recovered reward
+    # plt.sca(grid[5])
+    # gw_cts.plot_reward(
+    #     grid[5],
+    #     cts_reward,
+    #     0,
+    #     1,
+    #     resolution=100
+    # )
+    # plt.title("LLP IRL result", fontsize=font_size)
+    #
+    # # ========= TLP IRL
+    #
+    # # Plot ground truth reward
+    # plt.sca(grid[6])
+    # gw_cts.plot_reward(
+    #     grid[6],
+    #     gw_cts.ground_truth_reward,
+    #     0,
+    #     1,
+    #     resolution=size
+    # )
+    # plt.title("Ground truth reward", fontsize=font_size)
+    # plt.xticks([])
+    # plt.yticks([])
+    #
+    # # Plot provided trajectories
+    # plt.sca(grid[7])
+    # gw_cts.plot_trajectories(grid[7], trajectories)
+    #
+    # # Draw 2*sigma rings for basis functions
+    # for basis_mean in basis_function_means:
+    #     grid[7].add_artist(
+    #         plt.Circle(
+    #             basis_mean,
+    #             2*sigma,
+    #             color='black',
+    #             fill=False,
+    #             clip_on=False,
+    #             linewidth=0.1,
+    #             alpha=0.4
+    #         )
+    #     )
+    #
+    # plt.title("Provided trajectories", fontsize=font_size)
+    # plt.xticks([])
+    #
+    # # Plot recovered reward
+    # plt.sca(grid[8])
+    # #gw_cts.plot_policy(grid[8], cts_optimal_policy)
+    # plt.title("TLP IRL result", fontsize=font_size)
+    # plt.xticks([])
 
     # Add colorbar
     plt.sca(grid[0])
@@ -1004,4 +1103,5 @@ if __name__ == "__main__":
     plt.show()
 
 
-
+if __name__ == "__main__":
+    demo()
