@@ -1376,7 +1376,7 @@ class GridWorldCtsEnv(gym.Env):
 
         Args:
             policy (function): Policy pi(s) -> a
-            discount (float): Discount factor
+            discount (float): Discount factor *in continuous space*
 
             resolution (int): Width/height of the discretisation to use
             transition_samples (int): Number of transition samples to use
@@ -1427,13 +1427,18 @@ class GridWorldCtsEnv(gym.Env):
         # Wrap reward with reverse-discretisation
         undiscretised_reward = lambda s: self.ground_truth_reward(index2xy(s))
 
+        # Convert continuous discount to approximate discrete discount
+        step_size = self._action_distance
+        cell_size = 1 / resolution
+        discount_disc = discount ** (cell_size / step_size)
+
         # Perform VI
         values = value_iteration(
             states,
             transition_tensor,
             undiscretised_policy,
             undiscretised_reward,
-            discount,
+            discount_disc,
             tol=tol
         )
 
