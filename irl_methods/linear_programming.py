@@ -41,8 +41,8 @@ def linear_programming(
         discount_factor (float): The expert's discount factor. Must be in the
             range [0, 1).
         
-        l1_regularisation_weight (float): L1 norm regularization weight for the LP optimisation
-            objective function
+        l1_regularisation_weight (float): L1 norm regularization weight for the
+            LP optimisation objective function
         r_max (float): Maximum reward value
         verbose (bool): Print progress information
     
@@ -334,6 +334,12 @@ def large_linear_programming(
         # Loop over states
         for si, state in enumerate(state_sample):
 
+            # Show progress
+            if verbose:
+                percent = int(si / num_states * 100)
+                if percent % 5 == 0:
+                    print("{:d}%".format(percent))
+
             # Compute the value-expectations for the possible actions
             a_ve = np.zeros((num_basis_functions, num_actions))
             for i in range(num_transition_samples):
@@ -372,6 +378,10 @@ def large_linear_programming(
             ))
 
         # TODO ajs 12/Jun/2018 Remove redundant constraints
+
+        # *twitch*
+        if verbose:
+            print("100%")
 
         return c, a_ub, b_ub
 
@@ -768,7 +778,7 @@ def demo():
     # Play around with these values to see what effects they have
 
     # Size of the discrete gridworld
-    size = 5
+    size = 4
 
     # Wind probability for the discrete gridworld
     # wind_prob = 0.3
@@ -779,12 +789,18 @@ def demo():
     wind_strength = (1.5 / size) * wind_prob
 
     # Edge mode for the gridworlds
-    edge_mode = EDGEMODE_CLAMP
-    # edge_mode = EDGEMODE_WRAP
+    # edge_mode = EDGEMODE_CLAMP
+    edge_mode = EDGEMODE_WRAP
+
+    # Per-step reward
+    per_step_reward = 0
+
+    # Goal reward
+    goal_reward = 1
 
     # Goal state
-    # goal_state = np.random.randint(0, size, 2)
-    goal_state = np.array((0, 0), dtype=int)
+    goal_state = np.random.randint(0, size, 2)
+    # goal_state = np.array((0, 0), dtype=int)
 
     # Discount factor
     discount_factor = 0.9
@@ -804,7 +820,7 @@ def demo():
     l1 = np.random.uniform(0, 1)
 
     # Size of the gaussian basis function grid
-    bf_size = 5
+    bf_size = 6
 
     # Covariance of the basis functions
     sigma = (1/bf_size)*0.5
@@ -813,10 +829,11 @@ def demo():
     num_samples = 100
 
     # Number of transition samples to use when estimating values in LLP
-    num_transition_samples = 100
+    # If the wind is 0, this can be 1
+    num_transition_samples = 1
 
     # Penalty coefficient to use in LLP/TLP
-    penalty_coefficient = 2
+    penalty_coefficient = 1
     # penalty_coefficient = np.random.uniform(1, 5, 1)
 
     # Maximum trajectory length to use for TLP
@@ -838,8 +855,8 @@ def demo():
         size=size,
         wind=wind_prob,
         goal_states=[goal_state],
-        per_step_reward=0,
-        goal_reward=1,
+        per_step_reward=per_step_reward,
+        goal_reward=goal_reward,
         edge_mode=edge_mode
     )
     disc_optimal_policy = gw_disc.get_optimal_policy()
@@ -860,8 +877,8 @@ def demo():
         action_distance=step_size,
         wind_range=wind_strength,
         goal_range=[goal_state / size, goal_state / size + cell_size],
-        per_step_reward=0,
-        goal_reward=1,
+        per_step_reward=per_step_reward,
+        goal_reward=goal_reward,
         edge_mode=edge_mode
     )
     cts_optimal_policy = gw_cts.get_optimal_policy()
@@ -880,6 +897,7 @@ def demo():
         ordered_transition_tensor,
         discount_factor,
         l1_regularisation_weight=l1,
+        r_max=(per_step_reward + goal_reward),
         verbose=True
     )
 
@@ -917,7 +935,9 @@ def demo():
     for bfi, bf in enumerate(bfs):
 
         # Show progress
-        print("{:d}%".format(int(bfi/num_bfs*100)))
+        percent = int(bfi/num_bfs*100)
+        if percent % 5 == 0:
+            print("{:d}%".format(percent))
 
         basis_value_functions.append(
             gw_cts.estimate_value(
