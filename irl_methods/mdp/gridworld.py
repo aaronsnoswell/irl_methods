@@ -725,13 +725,15 @@ class GridWorldDiscEnv(gym.Env):
 
         return transitions_sorted
 
-    def estimate_value(self, policy, discount, *, tol=1e-6):
+    def estimate_value(self, policy, discount, *, reward=None, tol=1e-6):
         """Estimate the value of a policy over this GridWorld
 
         Args:
             policy (function): Policy pi(s) -> a
             discount (float): Discount factor
 
+            reward (function): Alternate reward function to use. None to use
+                default.
             tol (float): Convergence tolerance
 
         Returns:
@@ -739,11 +741,15 @@ class GridWorldDiscEnv(gym.Env):
                 estimated values, found using value iteration under the given
                 policy
         """
+
+        reward = reward if reward is not None else \
+            lambda s: self.ground_truth_reward[s]
+
         return value_iteration(
             range(len(self._S)),
             self.transition_tensor,
             policy,
-            lambda s: self.ground_truth_reward[s],
+            reward,
             discount,
             tol=tol
         )
@@ -1045,12 +1051,14 @@ class GridWorldCtsEnv(gym.Env):
             vmax=r_max
         )
 
-    def plot_policy(self, ax, policy, resolution=10):
-        """Plots a given policy function
+    def plot_policy(self, ax, policy, *, resolution=10):
+        """Plots a given policy function as quiver plot
 
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
             policy (function): Policy p(s) -> a mapping state indices to actions
+
+            resolution (int): Resolution to use when drawing policy vector field
         """
 
         # Set up plot
@@ -1368,6 +1376,7 @@ class GridWorldCtsEnv(gym.Env):
             policy,
             discount,
             *,
+            reward=None,
             resolution=10,
             transition_samples=100,
             tol=1e-6
@@ -1378,6 +1387,8 @@ class GridWorldCtsEnv(gym.Env):
             policy (function): Policy pi(s) -> a
             discount (float): Discount factor *in continuous space*
 
+            reward (function): Alternate reward function to use. None to use
+                default.
             resolution (int): Width/height of the discretisation to use
             transition_samples (int): Number of transition samples to use
                 when estimated discrete transition matrix. If wind is 0,
@@ -1389,6 +1400,8 @@ class GridWorldCtsEnv(gym.Env):
                 approximate values, found using value iteration under the given
                 policy over a discretised version of this gridworld
         """
+
+        reward = reward if reward is not None else self.ground_truth_reward
 
         # Discretisation conversion lambdas
         index2xy = lambda i: (
@@ -1425,7 +1438,7 @@ class GridWorldCtsEnv(gym.Env):
         undiscretised_policy = lambda s: policy(index2xy(s))
 
         # Wrap reward with reverse-discretisation
-        undiscretised_reward = lambda s: self.ground_truth_reward(index2xy(s))
+        undiscretised_reward = lambda s: reward(index2xy(s))
 
         # Convert continuous discount to approximate discrete discount
         step_size = self._action_distance
