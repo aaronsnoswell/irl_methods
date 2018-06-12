@@ -147,7 +147,11 @@ class GridWorldDiscEnv(gym.Env):
         ]
 
         # Transition matrix
-        self._T = np.zeros(shape=(len(self._S), len(self._A), len(self._S)))
+        self.transition_tensor = np.zeros((
+            len(self._S),
+            len(self._A),
+            len(self._S)
+        ))
 
         # Loop over initial states
         for si, state in enumerate(self._S):
@@ -164,7 +168,7 @@ class GridWorldDiscEnv(gym.Env):
                 dy = action[1]
 
                 # Update probability for desired action
-                self._T[
+                self.transition_tensor[
                     si,
                     ai,
                     self._xy2s(x + dx, y + dy)
@@ -176,7 +180,7 @@ class GridWorldDiscEnv(gym.Env):
                     wind_dx = wind_action[0]
                     wind_dy = wind_action[1]
 
-                    self._T[
+                    self.transition_tensor[
                         si,
                         ai,
                         self._xy2s(x + wind_dx, y + wind_dy)
@@ -252,7 +256,7 @@ class GridWorldDiscEnv(gym.Env):
         # Sample subsequent state from transition matrix
         self.state = np.random.choice(
             range(len(self._S)),
-            p=self._T[self.state, action, :]
+            p=self.transition_tensor[self.state, action, :]
         )
 
         # Check if we're done or not
@@ -679,7 +683,7 @@ class GridWorldDiscEnv(gym.Env):
             options, sorted according to the ordering in self._A
         """
 
-        transitions_sorted = copy.copy(self._T)
+        transitions_sorted = copy.copy(self.transition_tensor)
         for y in range(self._size):
             for x in range(self._size):
 
@@ -1318,7 +1322,8 @@ class GridWorldCtsEnv(gym.Env):
 
 
 def demo():
-    # Simple example of how to use these classes
+    """Simple example of how to use these classes
+    """
 
     # Exercise discrete gridworld
     print("Testing discrete GridWorld...")
