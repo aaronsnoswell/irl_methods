@@ -458,8 +458,8 @@ class GridWorldDiscEnv(gym.Env):
                 infer from reward map.
         """
 
-        r_min = -np.abs(rewards).max() if r_min is None else r_min
-        r_max = np.abs(rewards).max() if r_max is None else r_max
+        r_min = rewards.min() if r_min is None else r_min
+        r_max = rewards.max() if r_max is None else r_max
 
         # Set up plot
         self.configure_plot(ax, line_color="#666666", render_goals=False)
