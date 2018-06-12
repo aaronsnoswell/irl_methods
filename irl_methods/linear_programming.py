@@ -760,7 +760,7 @@ def demo():
 
     # region === Get some imports
     import matplotlib.pyplot as plt
-    from mpl_toolkits.axes_grid1 import ImageGrid
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
     from irl_methods.utils import gaussian, rollout
     from irl_methods.mdp.gridworld import (
         GridWorldDiscEnv,
@@ -904,6 +904,34 @@ def demo():
     print("Recovered reward vector:")
     print("{}".format(lp_reward))
 
+    fig = plt.figure()
+    plt.suptitle('Vanilla Linear Programming IRL')
+    plt.set_cmap("viridis")
+
+    # Plot ground truth reward
+    ax = plt.subplot(1, 3, 1)
+    gw_disc.plot_reward(ax, gw_disc.ground_truth_reward)
+    plt.title("Ground truth reward")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    # Plot provided policy
+    ax = plt.subplot(1, 3, 2)
+    gw_disc.plot_policy(ax, disc_optimal_policy)
+    plt.title("Provided policy")
+
+    # Plot recovered reward
+    ax = plt.subplot(1, 3, 3)
+    gw_disc.plot_reward(ax, lp_reward)
+    plt.title("IRL result")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    plt.tight_layout()
+    plt.pause(0.1)
+
     #endregion
 
     # region === LLP IRL
@@ -971,6 +999,73 @@ def demo():
     # Compose reward function lambda
     cts_reward = lambda s: (alpha_vector @ basis_vector_fn(s))[0]
 
+    fig = plt.figure()
+    plt.suptitle('Large Linear Programming IRL')
+    plt.set_cmap("viridis")
+
+    # Plot ground truth reward
+    ax = plt.subplot(1, 3, 1)
+    gw_cts.plot_reward(
+        ax,
+        gw_cts.ground_truth_reward,
+        r_min=0,
+        r_max=1,
+        resolution=size
+    )
+    plt.title("Ground truth reward")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    # Plot provided policy
+    ax = plt.subplot(1, 3, 2)
+
+    # Draw policy, sampled on a grid
+    gw_cts.plot_policy(
+        ax,
+        cts_optimal_policy,
+        resolution=size
+    )
+
+    # Draw sample points
+    plt.plot(
+        state_sample[:, 0],
+        state_sample[:, 1],
+        "C0.",
+        alpha=0.3
+    )
+
+    # Draw 2*sigma rings for basis functions
+    for basis_mean in bf_means:
+        ax.add_artist(
+            plt.Circle(
+                basis_mean,
+                2 * sigma,
+                color='black',
+                fill=False,
+                clip_on=False,
+                linewidth=0.1,
+                alpha=0.4
+            )
+        )
+
+    plt.title("Provided policy")
+
+    # Plot recovered reward
+    ax = plt.subplot(1, 3, 3)
+    gw_cts.plot_reward(
+        ax,
+        cts_reward,
+        resolution=100
+    )
+    plt.title("LLP IRL result")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    plt.tight_layout()
+    plt.pause(0.1)
+
     #endregion
 
     # region === TLP IRL
@@ -989,126 +1084,32 @@ def demo():
 
     # Run TLP
 
-    #endregion
 
-    # region === Plot the results
-    #################################################################
-
-    # Make a new figure
     fig = plt.figure()
+    plt.suptitle('Vanilla Linear Programming IRL')
     plt.set_cmap("viridis")
-    font_size = 7
-
-    grid = ImageGrid(
-        fig,
-        111,
-        nrows_ncols=(3, 3),
-        axes_pad=0.3,
-        share_all=False,
-        label_mode="L",
-        cbar_location="right",
-        cbar_mode="single",
-        cbar_size="5%",
-        cbar_pad=0.15,
-    )
-
-    # LP IRL
 
     # Plot ground truth reward
-    plt.sca(grid[0])
-    gw_disc.plot_reward(grid[0], gw_disc.ground_truth_reward, r_min=0, r_max=1)
-    plt.title("Ground truth reward", fontsize=font_size)
-    plt.yticks([])
-
-    # Plot provided policy
-    plt.sca(grid[1])
-    gw_disc.plot_policy(grid[1], disc_optimal_policy)
-    plt.title("Provided policy", fontsize=font_size)
-
-    # Plot recovered reward
-    plt.sca(grid[2])
-    gw_disc.plot_reward(grid[2], lp_reward, r_min=0, r_max=1)
-    plt.title("LP IRL result", fontsize=font_size)
-
-    # LLP IRL
-
-    # Plot ground truth reward
-    plt.sca(grid[3])
+    ax = plt.subplot(1, 3, 1)
     gw_cts.plot_reward(
-        grid[3],
+        ax,
         gw_cts.ground_truth_reward,
         r_min=0,
         r_max=1,
         resolution=size
     )
-    plt.title("Ground truth reward", fontsize=font_size)
-    plt.yticks([])
-
-    # Plot provided policy and state sample
-    plt.sca(grid[4])
-
-    # Draw policy, sampled on a grid
-    gw_cts.plot_policy(
-        grid[4],
-        cts_optimal_policy,
-        resolution=size
+    plt.title("Ground truth reward")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
     )
-
-    # Draw sample points
-    plt.plot(
-        state_sample[:, 0],
-        state_sample[:, 1],
-        "C0.",
-        alpha=0.3
-    )
-
-    # Draw 2*sigma rings for basis functions
-    for basis_mean in bf_means:
-        grid[4].add_artist(
-            plt.Circle(
-                basis_mean,
-                2*sigma,
-                color='black',
-                fill=False,
-                clip_on=False,
-                linewidth=0.1,
-                alpha=0.4
-            )
-        )
-
-    plt.title("Provided policy", fontsize=font_size)
-
-    # Plot recovered reward
-    plt.sca(grid[5])
-    gw_cts.plot_reward(
-        grid[5],
-        cts_reward,
-        resolution=100
-    )
-    plt.title("LLP IRL result", fontsize=font_size)
-
-    # TLP IRL
-
-    # Plot ground truth reward
-    plt.sca(grid[6])
-    gw_cts.plot_reward(
-        grid[6],
-        gw_cts.ground_truth_reward,
-        r_min=0,
-        r_max=1,
-        resolution=size
-    )
-    plt.title("Ground truth reward", fontsize=font_size)
-    plt.xticks([])
-    plt.yticks([])
 
     # Plot provided trajectories
-    plt.sca(grid[7])
-    gw_cts.plot_trajectories(grid[7], trajectories)
+    ax = plt.subplot(1, 3, 2)
+    gw_cts.plot_trajectories(ax, trajectories)
 
     # Draw 2*sigma rings for basis functions
     for basis_mean in bf_means:
-        grid[7].add_artist(
+        ax.add_artist(
             plt.Circle(
                 basis_mean,
                 2*sigma,
@@ -1120,20 +1121,17 @@ def demo():
             )
         )
 
-    plt.title("Provided trajectories", fontsize=font_size)
-    plt.xticks([])
+    plt.title("Provided trajectories")
 
-    # # Plot recovered reward
-    # plt.sca(grid[8])
-    # #gw_cts.plot_policy(grid[8], cts_optimal_policy)
-    # plt.title("TLP IRL result", fontsize=font_size)
-    # plt.xticks([])
+    # Plot recovered reward
+    ax = plt.subplot(1, 3, 3)
+    #gw_disc.plot_reward(ax, lp_reward)
+    #plt.title("IRL result")
+    #plt.colorbar(
+    #    cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    #)
 
-    # Add colorbar
-    plt.sca(grid[0])
-    plt.yticks([])
-    plt.colorbar(cax=grid[0].cax)
-
+    plt.tight_layout()
     plt.show()
 
     # endregion
