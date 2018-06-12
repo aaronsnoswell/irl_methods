@@ -1052,8 +1052,8 @@ class GridWorldCtsEnv(gym.Env):
                 ))
                 z[yi, xi] = reward_fn(state)
 
-        r_min = r_min if r_min is not None else min(min(z))
-        r_max = r_max if r_max is not None else max(max(z))
+        r_min = r_min if r_min is not None else np.min(np.min(z))
+        r_max = r_max if r_max is not None else np.max(np.max(z))
 
         plt.pcolormesh(
             x,
