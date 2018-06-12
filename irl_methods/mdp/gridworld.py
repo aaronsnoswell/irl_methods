@@ -464,9 +464,6 @@ class GridWorldDiscEnv(gym.Env):
                 infer from reward map.
         """
 
-        r_min = rewards.min() if r_min is None else r_min
-        r_max = rewards.max() if r_max is None else r_max
-
         # Set up plot
         self.configure_plot(ax, line_color="#666666", render_goals=False)
 
@@ -1051,9 +1048,6 @@ class GridWorldCtsEnv(gym.Env):
                     yi/resolution + (1/resolution)/2
                 ))
                 z[yi, xi] = reward_fn(state)
-
-        r_min = r_min if r_min is not None else np.min(np.min(z))
-        r_max = r_max if r_max is not None else np.max(np.max(z))
 
         plt.pcolormesh(
             x,
