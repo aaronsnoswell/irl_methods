@@ -446,7 +446,7 @@ class GridWorldDiscEnv(gym.Env):
         ax.yaxis.set_tick_params(size=0)
 
     def plot_reward(self, ax, rewards, *, r_min=None, r_max=None):
-        """Plots a given reward vector
+        """Plots a given reward (or value) vector
 
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
