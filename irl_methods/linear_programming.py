@@ -227,11 +227,11 @@ def linear_programming(
 def large_linear_programming(
     state_sample,
     num_actions,
-    sorted_transition_function,
-    basis_functions,
+    ordered_transition_function,
+    basis_value_fn,
     *,
     penalty_coefficient=2.0,
-    num_transition_samples=1,
+    num_transition_samples=100,
     verbose=False
 ):
     """Linear Programming IRL for large state spaces by Ng and Russell, 2000
@@ -248,14 +248,15 @@ def large_linear_programming(
         state_sample (list): A list of states that will be used to approximate
             the reward function over the full state space
         num_actions (int): The number of actions
-        sorted_transition_function (function): A sampling transition function
+        ordered_transition_function (function): A sampling transition function
             T(s, a_i) -> s' encoding a stationary deterministic policy. The
             structure of T must be that the 0th action T(:, 0) corresponds to a
             sample from the expert policy, and T(:, i), i!=0 corresponds to a
             sample from the ith non-expert action at each state, for some
-            arbitrary but consistent
-            ordering of actions.
-        basis_functions (list): A vector of basis functions phi_i(s) -> float
+            arbitrary but consistent ordering of actions.
+        basis_value_fn (function): A function bv(s) -> list taking a state
+            and returning a vector where each entry i is an estimate of the
+            value of that state, if ith basis function was the reward function.
 
         penalty_coefficient (float): Penalty function coefficient. Ng and
             Russell find 2 is robust. Must be >= 1.
@@ -274,7 +275,20 @@ def large_linear_programming(
     num_states = len(state_sample)
 
     # Measure number of basis functions
-    num_basis_functions = len(basis_functions)
+    num_basis_functions = len(basis_value_fn(state_sample[0]))
+
+    if verbose:
+        print("Large Linear Programming IRL")
+        print(
+            "num_states={:d}, num_actions={:d}, num_basis_functions={:d}, "
+            "penalty_coefficient={:.3f}, num_transition_samples={:d}".format(
+                num_states,
+                num_actions,
+                num_basis_functions,
+                penalty_coefficient,
+                num_transition_samples
+            )
+        )
 
     # Enforce valid penalty function coefficient
     assert penalty_coefficient >= 1, \
@@ -282,145 +296,124 @@ def large_linear_programming(
             penalty_coefficient
         )
 
-    # Helper to estimate the mean (expectation) of a stochastic function
-    def expectation(fn):
-        """Compute the expectation of a stochastic function
-        Args:
-            fn (function): Function to compute mean of
-
-        Returns:
-            (float): E[fn()]
-        """
-        return sum(
-            [fn() for n in range(num_transition_samples)]
-        ) / num_transition_samples
-
-    # Precompute the value expectation tensor
-    # This is an array of shape (num_basis_functions, num_actions-1, num_states)
-    # where VE[:, i, j] is a vector of basis function coefficients
-    # indicating the expected difference in value between the expert policy
-    # action and the ith non-expert action from state-sample j
-    ve_tensor = np.zeros(shape=(
-        num_basis_functions,
-        num_actions - 1,
-        num_states
-    ))
-
-    # Loop over sampled initial states
-    for j, s_j in enumerate(state_sample):
-        if j % max(int(num_states / 20), 1) == 0 and verbose:
-            print("Computing expectations... ({:.1f}%)".format(
-                j / num_states * 100
-            ))
-
-        # Compute expert basis expectations
-        expert_basis_expectations = np.array([
-            expectation(
-                lambda: phi_i(sorted_transition_function(s_j, 0))
-            )
-            for phi_i in basis_functions
-        ])
-
-        # Loop over num_actions-1 non-expert actions
-        for i in range(1, num_actions):
-            # Compute and store the expectation difference for this start state
-            ve_tensor[:, i - 1, j] = expert_basis_expectations - \
-                 np.array([
-                     expectation(
-                         lambda: phi_i(sorted_transition_function(s_j, i))
-                     )
-                     for phi_i in basis_functions
-                 ])
-
-            print("From state {}, for action {}, ve_diff={}".format(
-                j,
-                i,
-                ve_tensor[:, i - 1, j]
-            ))
-
-
-    # TODO ajs 06/Jun/18 Remove redundant and trivial ve_tensor entries as
-    # they create duplicate constraints
-
     # Formulate the linear programming problem constraints
     # NB: The general form for adding a constraint looks like this
     # c, A_ub, b_ub = f(c, A_ub, b_ub)
     if verbose:
         print("Composing LP problem...")
 
-    def add_costly_single_step_constraints(c, A_ub, b_ub):
+    def add_costly_single_step_constraints(c, a_ub, b_ub):
+        """Implement Linear Programming IRL method for large state spaces
+
+        This will add m new objective parameters and 2*(k-1)*m new constraints,
+        where k is the number of actions and m is the number of sampled states
+
+        NB: Assumes the true optimisation variables are first in the c vector.
+
+        Args:
+            c (numpy array): Objective function weights
+            a_ub (numpy array): Upper bound constraint coefficient matrix
+            b_ub (numpy array): Upper bound constraint RHS vector
+
+        Returns
+            (numpy array): Objective function weights
+            (numpy array): Upper bound constraint coefficient matrix
+            (numpy array): Upper bound constraint RHS vector
         """
-        Augments the objective and adds constraints to implement the Linear
-        Programming IRL method for large state spaces
 
-        This will add up to num_states extra variables and
-        2*num_states*(num_actions-1) constraints (it does not add 'trivial'
-        constraints)
+        # Extend the objective function adding one dummy parameter per
+        # sampled state
+        # NB: cvxopt minimises, so we have a -1 here, not a 1
+        c = np.hstack((c, -1 * np.ones(shape=(1, num_states))))
+        a_ub = np.hstack((a_ub, np.zeros(shape=(a_ub.shape[0], num_states))))
 
-        NB: Assumes the true optimisation variables are first in the c vector
-        """
+        # Loop over states
+        for si, state in enumerate(state_sample):
 
-        # Step 1: Add the extra optimisation variables for each min{} operator
-        # (one per sampled state)
-        c = np.hstack([np.zeros(shape=(1, num_basis_functions)), np.ones(shape=(1, num_states))])
-        A_ub = np.hstack([A_ub, np.zeros(shape=(A_ub.shape[0], num_states))])
+            # Compute the value-expectations for the possible actions
+            a_ve = np.zeros((num_basis_functions, num_actions))
+            for i in range(num_transition_samples):
+                for a in range(num_actions):
+                    a_ve[:, a] += basis_value_fn(
+                        ordered_transition_function(state, a)
+                    )
+            a_ve /= num_transition_samples
 
-        # Step 2: Add the constraints
+            # Find the difference w.r.t the expert (0th action)
+            a_ve_diff = np.subtract(np.array([a_ve[:, 0]]).T, a_ve[:, 1:])
 
-        # Loop for each of the starting sampled states s_j
-        for j in range(ve_tensor.shape[2]):
-            if j % max(int(num_states / 20), 1) == 0 and verbose:
-                print("Adding constraints... ({:.1f}%)".format(j / num_states * 100))
+            # Prepare the RHS block of the a_ub matrix
+            tmp = np.zeros((1, num_states))
+            tmp[0, si] = -1
+            tmp = np.vstack((tmp for _ in range(num_actions-1)))
 
-            # Loop over the num_actions-1 non-expert actions
-            for i in range(1, num_actions):
-                # Add two constraints, one for each half of the penalty
-                # function p(x)
-                constraint_row = np.hstack([ve_tensor[:, i - 1, j], \
-                                            np.zeros(shape=num_states)])
-                constraint_row[num_basis_functions + j] = -1
-                A_ub = np.vstack((A_ub, constraint_row))
-                b_ub = np.vstack((b_ub, 0))
+            # Append to first half of penalty constraints to a_ub, b_ub
+            a_ub = np.vstack((
+                a_ub,
+                np.hstack((a_ve_diff.T, tmp))
+            ))
+            b_ub = np.vstack((
+                b_ub,
+                np.vstack((0 for _ in range(num_actions-1)))
+            ))
 
-                constraint_row = np.hstack([penalty_coefficient * ve_tensor[:, i - 1, j], \
-                                            np.zeros(shape=num_states)])
-                constraint_row[num_basis_functions + j] = -1
-                A_ub = np.vstack((A_ub, constraint_row))
-                b_ub = np.vstack((b_ub, 0))
+            # Append to second half of penalty constraints to a_ub, b_ub
+            a_ub = np.vstack((
+                a_ub,
+                np.hstack((penalty_coefficient * a_ve_diff.T, tmp))
+            ))
+            b_ub = np.vstack((
+                b_ub,
+                np.vstack((0 for _ in range(num_actions-1)))
+            ))
 
-        return c, A_ub, b_ub
+        # TODO ajs 12/Jun/2018 Remove redundant constraints
 
-    def add_alpha_size_constraints(c, A_ub, b_ub):
-        """
-        Add constraints for a maximum |alpha| value of 1
-        This will add 2 * num_basis_functions extra constraints
+        return c, a_ub, b_ub
 
-        NB: Assumes the true optimisation variables are first in the c vector
+    def add_alpha_size_constraints(c, a_ub, b_ub):
+        """Add constraints for a maximum reward coefficient value of 1
+
+        This will add 2*d extra constraints, where d is the number of basis
+        functions.
+
+        NB: Assumes the true optimisation variables are first in the c vector.
+
+        Args:
+            c (numpy array): Objective function weights
+            a_ub (numpy array): Upper bound constraint coefficient matrix
+            b_ub (numpy array): Upper bound constraint RHS vector
+
+        Returns
+            (numpy array): Objective function weights
+            (numpy array): Upper bound constraint coefficient matrix
+            (numpy array): Upper bound constraint RHS vector
         """
         for i in range(num_basis_functions):
-            constraint_row = [0] * A_ub.shape[1]
+            constraint_row = [0] * a_ub.shape[1]
             constraint_row[i] = 1
-            A_ub = np.vstack((A_ub, constraint_row))
+            a_ub = np.vstack((a_ub, constraint_row))
             b_ub = np.vstack((b_ub, 1))
 
-            constraint_row = [0] * A_ub.shape[1]
+            constraint_row = [0] * a_ub.shape[1]
             constraint_row[i] = -1
-            A_ub = np.vstack((A_ub, constraint_row))
+            a_ub = np.vstack((a_ub, constraint_row))
             b_ub = np.vstack((b_ub, 1))
-        return c, A_ub, b_ub
+
+        return c, a_ub, b_ub
 
     # Prepare LP constraint matrices
-    c = np.zeros(shape=[1, num_basis_functions], dtype=float)
-    A_ub = np.zeros(shape=[0, num_basis_functions], dtype=float)
-    b_ub = np.zeros(shape=[0, 1])
+    c = np.zeros(shape=(1, num_basis_functions), dtype=float)
+    a_ub = np.zeros(shape=(0, num_basis_functions), dtype=float)
+    b_ub = np.zeros(shape=(0, 1))
 
     # Compose LP optimisation problem
-    c, A_ub, b_ub = add_costly_single_step_constraints(c, A_ub, b_ub)
-    c, A_ub, b_ub = add_alpha_size_constraints(c, A_ub, b_ub)
+    c, a_ub, b_ub = add_costly_single_step_constraints(c, a_ub, b_ub)
+    c, a_ub, b_ub = add_alpha_size_constraints(c, a_ub, b_ub)
 
     if verbose:
         print("Number of optimisation variables: {}".format(c.shape[1]))
-        print("Number of constraints: {}".format(A_ub.shape[0]))
+        print("Number of constraints: {}".format(a_ub.shape[0]))
 
     # Solve for a solution
     if verbose:
@@ -428,10 +421,10 @@ def large_linear_programming(
 
     # NB: cvxopt.solvers.lp expects a 1d c vector
     solvers.options['show_progress'] = verbose
-    res = solvers.lp(matrix(c[0, :]), matrix(A_ub), matrix(b_ub))
+    res = solvers.lp(matrix(c[0, :]), matrix(a_ub), matrix(b_ub))
 
     # Extract the true optimisation variables
-    alpha_vector = res['x'][0:num_basis_functions].T
+    alpha_vector = np.array(res['x'][0:num_basis_functions].T)
 
     return alpha_vector, res
 
@@ -748,7 +741,7 @@ def demo():
     """ Demonstrate these methods on some gridworld problems
     """
 
-    # Get some imports
+    # region === Get some imports
     import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1 import ImageGrid
     from irl_methods.utils import gaussian, rollout
@@ -764,15 +757,17 @@ def demo():
     # Truncate numpy float decimal points
     np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
 
-    # === GridWorld parameters
+    #endregion
+
+    # region === GridWorld parameters
     # #################################################################
     # Play around with these values to see what effects they have
 
     # Size of the discrete gridworld
-    size = 8
+    size = 5
 
     # Wind probability for the discrete gridworld
-    wind_prob = 0.3
+    # wind_prob = 0.3
     # wind_prob = np.random.uniform(0, 0.9)
     wind_prob = 0
 
@@ -784,8 +779,8 @@ def demo():
     # edge_mode = EDGEMODE_WRAP
 
     # Goal state
-    goal_state = np.array((size-1, size-1), dtype=int)
     # goal_state = np.random.randint(0, size, 2)
+    goal_state = np.array((0, 0), dtype=int)
 
     # Discount factor
     discount_factor = 0.9
@@ -795,7 +790,9 @@ def demo():
     step_size = 0.1
     # step_size = np.random.uniform((1 / size) * 0.01, (1 / size) * 0.5)
 
-    # === Solver parameters
+    #endregion
+
+    # region === Solver parameters
     # #################################################################
 
     # Vanilla Linear Programming L1 regularisation weight
@@ -803,7 +800,7 @@ def demo():
     l1 = np.random.uniform(0, 1)
 
     # Size of the gaussian basis function grid
-    bf_size = 3
+    bf_size = 5
 
     # Covariance of the basis functions
     sigma = (1/bf_size)*0.5
@@ -815,16 +812,17 @@ def demo():
     num_transition_samples = 100
 
     # Penalty coefficient to use in LLP/TLP
-    # penalty_coefficient = 1
-    penalty_coefficient = np.random.uniform(1, 5, 1)
+    penalty_coefficient = 2
+    # penalty_coefficient = np.random.uniform(1, 5, 1)
 
     # Maximum trajectory length to use for TLP
     max_trajectory_length = (0.5 / step_size) * 2
 
     # === End of parameters - Touching the below lines may break the demos :)
     # #################################################################
+    # endregion
 
-    # Construct the gridworlds
+    # region === Construct the gridworlds
     print("Discrete GridWorld, "
         "size={:d}, wind_prob={:.3f}%, edge_mode={}".format(
             size,
@@ -841,7 +839,7 @@ def demo():
         edge_mode=edge_mode
     )
     disc_optimal_policy = gw_disc.get_optimal_policy()
-    sorted_transition_tensor = gw_disc.get_ordered_transition_tensor(
+    ordered_transition_tensor = gw_disc.get_ordered_transition_tensor(
         disc_optimal_policy
     )
 
@@ -867,20 +865,24 @@ def demo():
         cts_optimal_policy
     )
 
-    # ========= Vanilla LP IRL
-    # #################################################################
+    #endregion
+
+    # region === Vanilla LP IRL
+    ##################################################################
     print("")
 
     # Run LP IRL
     lp_reward, _ = linear_programming(
-        sorted_transition_tensor,
+        ordered_transition_tensor,
         discount_factor,
         l1_regularisation_weight=l1,
         verbose=True
     )
 
-    # ========= LLP IRL
-    # #################################################################
+    #endregion
+
+    # region === LLP IRL
+    ##################################################################
     print("")
 
     # Sample some states
@@ -907,6 +909,8 @@ def demo():
     print("Computing value estimates...")
     basis_value_functions = []
     for bfi, bf in enumerate(bfs):
+
+        # Show progress
         print("{:d}%".format(int(bfi/num_bfs*100)))
 
         basis_value_functions.append(
@@ -923,63 +927,26 @@ def demo():
 
     # *twitch*
     print("100%")
+    print("")
 
+    alpha_vector, _ = large_linear_programming(
+        state_sample,
+        num_actions,
+        ordered_transition_function,
+        basis_vector_fn,
+        penalty_coefficient=penalty_coefficient,
+        num_transition_samples=num_transition_samples,
+        verbose=True
+    )
 
-    # Given some initial state
-    s0 = np.array((0.3, 0.3))
+    print("Recovered alpha vector:\n{}".format(alpha_vector))
 
-    # Compute the value-expectations for the possible actions
-    a_ve = np.zeros((num_bfs, num_actions))
-    expectation_samples = 100
-    for i in range(expectation_samples):
-        for a in range(num_actions):
-            a_ve[:, a] += basis_vector_fn(
-                ordered_transition_function(s0, a)
-            )
+    # Compose reward function lambda
+    cts_reward = lambda s: (alpha_vector @ basis_vector_fn(s))[0]
 
-    # Normalize expectations
-    a_ve /= expectation_samples
+    #endregion
 
-    # Find the difference w.r.t the expert (0th action)
-    a_ve_diff = np.subtract(np.array([a_ve[:, 0]]).T, a_ve[:, 1:])
-
-    #penalty_coefficient * a_ve_diff
-
-
-
-    # Compute the value matrix - the (i, j)th component represents the value of
-    #  the jth state under the ith basis function
-    values = np.zeros((num_bfs, num_samples))
-    for bi, bvf in enumerate(basis_value_functions):
-        for si, state in enumerate(state_sample):
-            values[bi, si] = bvf(state)
-
-    # Build matrix of features for each sampled state
-    feature_matrix = np.zeros((num_samples, num_bfs))
-    for si, state in enumerate(state_sample):
-        for fi, basis_function in enumerate(bfs):
-            feature_matrix[si, fi] = basis_function(state)
-
-    # alpha_vector, _ = large_linear_programming(
-    #     state_sample,
-    #     num_actions,
-    #     ordered_transition_function,
-    #     basis_functions,
-    #     verbose=True,
-    #     num_transition_samples=num_transition_samples,
-    #     penalty_coefficient=penalty_coefficient
-    # )
-    #
-    # # Compose reward function lambda
-    # cts_reward = lambda s: np.dot(
-    #     alpha_vector,
-    #     [fn(s) for fn in basis_functions]
-    # )[0]
-
-
-    return
-
-    # ========= TLP IRL
+    # region === TLP IRL
     #################################################################
 
     # Roll-out some expert trajectories
@@ -995,7 +962,9 @@ def demo():
 
     # Run TLP
 
-    # ========= Plot the results
+    #endregion
+
+    # region === Plot the results
     #################################################################
 
     # Make a new figure
@@ -1016,7 +985,7 @@ def demo():
         cbar_pad=0.15,
     )
 
-    # ========= LP IRL
+    # LP IRL
 
     # Plot ground truth reward
     plt.sca(grid[0])
@@ -1034,15 +1003,15 @@ def demo():
     gw_disc.plot_reward(grid[2], lp_reward, r_min=0, r_max=1)
     plt.title("LP IRL result", fontsize=font_size)
 
-    # ========= LLP IRL
+    # LLP IRL
 
     # Plot ground truth reward
     plt.sca(grid[3])
     gw_cts.plot_reward(
         grid[3],
         gw_cts.ground_truth_reward,
-        0,
-        1,
+        r_min=0,
+        r_max=1,
         resolution=size
     )
     plt.title("Ground truth reward", fontsize=font_size)
@@ -1082,53 +1051,51 @@ def demo():
 
     plt.title("Provided policy", fontsize=font_size)
 
-    # # Plot recovered reward
-    # plt.sca(grid[5])
-    # gw_cts.plot_reward(
-    #     grid[5],
-    #     cts_reward,
-    #     0,
-    #     1,
-    #     resolution=100
-    # )
-    # plt.title("LLP IRL result", fontsize=font_size)
-    #
-    # # ========= TLP IRL
-    #
-    # # Plot ground truth reward
-    # plt.sca(grid[6])
-    # gw_cts.plot_reward(
-    #     grid[6],
-    #     gw_cts.ground_truth_reward,
-    #     0,
-    #     1,
-    #     resolution=size
-    # )
-    # plt.title("Ground truth reward", fontsize=font_size)
-    # plt.xticks([])
-    # plt.yticks([])
-    #
-    # # Plot provided trajectories
-    # plt.sca(grid[7])
-    # gw_cts.plot_trajectories(grid[7], trajectories)
-    #
-    # # Draw 2*sigma rings for basis functions
-    # for basis_mean in basis_function_means:
-    #     grid[7].add_artist(
-    #         plt.Circle(
-    #             basis_mean,
-    #             2*sigma,
-    #             color='black',
-    #             fill=False,
-    #             clip_on=False,
-    #             linewidth=0.1,
-    #             alpha=0.4
-    #         )
-    #     )
-    #
-    # plt.title("Provided trajectories", fontsize=font_size)
-    # plt.xticks([])
-    #
+    # Plot recovered reward
+    plt.sca(grid[5])
+    gw_cts.plot_reward(
+        grid[5],
+        cts_reward,
+        resolution=100
+    )
+    plt.title("LLP IRL result", fontsize=font_size)
+
+    # TLP IRL
+
+    # Plot ground truth reward
+    plt.sca(grid[6])
+    gw_cts.plot_reward(
+        grid[6],
+        gw_cts.ground_truth_reward,
+        r_min=0,
+        r_max=1,
+        resolution=size
+    )
+    plt.title("Ground truth reward", fontsize=font_size)
+    plt.xticks([])
+    plt.yticks([])
+
+    # Plot provided trajectories
+    plt.sca(grid[7])
+    gw_cts.plot_trajectories(grid[7], trajectories)
+
+    # Draw 2*sigma rings for basis functions
+    for basis_mean in bf_means:
+        grid[7].add_artist(
+            plt.Circle(
+                basis_mean,
+                2*sigma,
+                color='black',
+                fill=False,
+                clip_on=False,
+                linewidth=0.1,
+                alpha=0.4
+            )
+        )
+
+    plt.title("Provided trajectories", fontsize=font_size)
+    plt.xticks([])
+
     # # Plot recovered reward
     # plt.sca(grid[8])
     # #gw_cts.plot_policy(grid[8], cts_optimal_policy)
@@ -1138,9 +1105,11 @@ def demo():
     # Add colorbar
     plt.sca(grid[0])
     plt.yticks([])
-    plt.colorbar(cax=grid[0].cax)
+    plt.colorbar(cax=grid[5].cax)
 
     plt.show()
+
+    # endregion
 
 
 if __name__ == "__main__":
