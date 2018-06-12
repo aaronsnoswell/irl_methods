@@ -1404,10 +1404,10 @@ class GridWorldCtsEnv(gym.Env):
         reward = reward if reward is not None else self.ground_truth_reward
 
         # Discretisation conversion lambdas
-        index2xy = lambda i: (
+        index2xy = lambda i: np.array((
             (i % resolution)/resolution + (1/resolution)*0.5,
             (i // resolution)/resolution + (1/resolution)*0.5
-        )
+        ))
         xy2index = lambda x, y: \
             int(max(min(y * resolution, resolution - 1), 0)) * resolution + \
             int(max(min(x * resolution, resolution - 1), 0))
