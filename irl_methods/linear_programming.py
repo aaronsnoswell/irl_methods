@@ -55,6 +55,19 @@ def linear_programming(
     n = sorted_transition_tensor.shape[0]
     k = sorted_transition_tensor.shape[1]
 
+    if verbose:
+        print("Vanilla Linear Programming IRL")
+        print(
+            "num_states={:d}, num_actions={:d}, discount_factor={:.3f}, "
+            "l1_regularisation_weight={:.3f}, r_max={:.3f}".format(
+                n,
+                k,
+                discount_factor,
+                l1_regularisation_weight,
+                r_max
+            )
+        )
+
     # Compute the discounted transition matrix inverse term
     _T_disc_inv = np.linalg.inv(
         np.identity(n) - discount_factor * sorted_transition_tensor[:, 0, :]
@@ -852,6 +865,7 @@ def demo():
 
     # ========= Vanilla LP IRL
     # #################################################################
+    print("")
 
     # Run LP IRL
     lp_reward, _ = linear_programming(
@@ -863,18 +877,12 @@ def demo():
 
     # ========= LLP IRL
     # #################################################################
+    print("")
 
-    # Run LP IRL for large state spaces
+    # Sample some states
     state_sample = np.random.uniform(0, 1, (num_samples, 2))
 
-    # num_samples = 4
-    # state_sample = np.array([
-    #    [0.25, 0.25],
-    #    [0.75, 0.25],
-    #    [0.25, 0.75],
-    #    [0.75, 0.75],
-    # ])
-
+    # Measure number of actions
     num_actions = len(gw_cts._A)
 
     # Define a set of basis functions
