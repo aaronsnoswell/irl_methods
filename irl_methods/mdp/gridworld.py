@@ -32,11 +32,13 @@ ACTION_NORTH = 0
 ACTION_EAST = 1
 ACTION_SOUTH = 2
 ACTION_WEST = 3
+ACTION_NOTHING = 4
 ACTION_STRINGS = [
     "North",
     "East",
     "South",
-    "West"
+    "West",
+    "Nothing"
 ]
 
 # Feature map enum
@@ -146,6 +148,8 @@ class GridWorldDiscEnv(gym.Env):
             # West
             (-1, 0),
 
+            # Nothing
+            (0, 0)
         ]
 
         # Transition matrix
@@ -637,6 +641,10 @@ class GridWorldDiscEnv(gym.Env):
             # Find the distance to the goal
             dx, dy = np.array(nearest_goal) - self._s2xy(state)
 
+            # If we're at the goal, do nothing
+            if dx == dy == 0:
+                return ACTION_NOTHING
+
             direction = None
             if abs(dx) == abs(dy):
                 # x and y distances are equal - flip a coin to avoid bias in
@@ -797,6 +805,8 @@ class GridWorldCtsEnv(gym.Env):
             # West
             (-1, 0),
 
+            # Nothing
+            (0, 0)
         ]
 
         # Gym action space object (index corresponds to entry in self._A list)
@@ -1218,6 +1228,10 @@ class GridWorldCtsEnv(gym.Env):
                 actions
         """
 
+        goal_width, goal_height = np.abs(
+            self._goal_space.high - self._goal_space.low
+        )
+
         # Compute goal location
         goal_positions = [np.mean(
             np.vstack(
@@ -1262,6 +1276,10 @@ class GridWorldCtsEnv(gym.Env):
             Returns:
                 (int): One of the ACTION_* globals defined in this module
             """
+
+            # If we're at the goal, do nothing
+            if self._goal_space.contains(np.array(state)):
+                return ACTION_NOTHING
 
             # Pick the nearest goal
             nearest_goal = None
