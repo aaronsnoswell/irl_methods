@@ -1018,15 +1018,24 @@ class GridWorldCtsEnv(gym.Env):
         ax.set_ylim([0, 1])
         ax.yaxis.set_tick_params(size=0)
 
-    def plot_reward(self, ax, reward_fn, r_min, r_max, *, resolution=10):
+    def plot_reward(
+            self,
+            ax,
+            reward_fn,
+            *,
+            r_min=None,
+            r_max=None,
+            resolution=10):
         """Rasters a given reward function
 
         Args:
             ax (matplotlib.axes.Axes): Axes to render to
             reward_fn (function): Reward function r(s) -> float
-            r_min (float): Minimum reward - used for color map scaling
-            r_max (float): Maximum reward - used for color map scaling
 
+            r_min (float): Minimum reward or None to infer from rasterisation.
+                Used for color map scaling.
+            r_max (float): Maximum reward or None to infer from rasterisation.
+                Used for color map scaling.
             resolution (int): Raster resolution width/height
         """
 
@@ -1042,6 +1051,9 @@ class GridWorldCtsEnv(gym.Env):
                     yi/resolution + (1/resolution)/2
                 ))
                 z[yi, xi] = reward_fn(state)
+
+        r_min = r_min if r_min is not None else min(min(z))
+        r_max = r_max if r_max is not None else max(max(z))
 
         plt.pcolormesh(
             x,
@@ -1592,8 +1604,8 @@ def demo():
     gw_cts.plot_reward(
         ax,
         gw_cts.ground_truth_reward,
-        per_step_reward,
-        per_step_reward+goal_reward
+        r_min=per_step_reward,
+        r_max=per_step_reward+goal_reward
     )
     plt.title("Reward")
     plt.colorbar(
@@ -1604,8 +1616,8 @@ def demo():
     gw_cts.plot_reward(
         fig.gca(),
         value_fn,
-        min(cts_value_matrix),
-        max(cts_value_matrix)
+        r_min=min(cts_value_matrix),
+        r_max=max(cts_value_matrix)
     )
     plt.title("Estimated value function")
     plt.colorbar(
