@@ -1453,13 +1453,21 @@ def demo():
     """Simple example of how to use these classes
     """
 
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
     # Truncate numpy float decimal points
     np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
 
     # Exercise discrete gridworld
     print("Testing discrete GridWorld...")
     size = 5
-    gw_disc = GridWorldDiscEnv(size=size, per_step_reward=-1)
+    per_step_reward = -1
+    goal_reward = 1
+    gw_disc = GridWorldDiscEnv(
+        size=size,
+        per_step_reward=per_step_reward,
+        goal_reward=goal_reward
+    )
     policy = gw_disc.get_optimal_policy()
 
     print("Ordered transition matrix:")
@@ -1495,15 +1503,31 @@ def demo():
     disc_value_matrix = gw_disc.estimate_value(policy, discount)
     print("Estimated value function with discount={}:".format(discount))
     print(np.flipud(np.reshape(disc_value_matrix, (size, size))))
+
     fig = plt.figure()
-    gw_disc.plot_reward(fig.gca(), disc_value_matrix)
-    plt.colorbar()
+    ax = plt.subplot(1, 2, 1)
+    gw_disc.plot_reward(ax, gw_disc.ground_truth_reward)
+    plt.title("Reward")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    ax = plt.subplot(1, 2, 2)
+    gw_disc.plot_reward(ax, disc_value_matrix)
     plt.title("Estimated value function")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
     plt.show()
 
     # Exercise cts gridworld
     print("Testing continuous GridWorld...")
-    gw_cts = GridWorldCtsEnv(per_step_reward=-1)
+    per_step_reward = -1
+    goal_reward = 1
+    gw_cts = GridWorldCtsEnv(
+        per_step_reward=per_step_reward,
+        goal_reward=goal_reward
+    )
     policy = gw_cts.get_optimal_policy()
 
     # Choose a feature map to use
@@ -1549,15 +1573,31 @@ def demo():
         resolution
     ))
     print(np.flipud(np.reshape(cts_value_matrix, (resolution, resolution))))
+
     fig = plt.figure()
+    ax = plt.subplot(1, 2, 1)
+    gw_cts.plot_reward(
+        ax,
+        gw_cts.ground_truth_reward,
+        per_step_reward,
+        per_step_reward+goal_reward
+    )
+    plt.title("Reward")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    ax = plt.subplot(1, 2, 2)
     gw_cts.plot_reward(
         fig.gca(),
         value_fn,
         min(cts_value_matrix),
         max(cts_value_matrix)
     )
-    plt.colorbar()
     plt.title("Estimated value function")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
     plt.show()
 
     # Test trajectory rendering on a wrapping gridworld
