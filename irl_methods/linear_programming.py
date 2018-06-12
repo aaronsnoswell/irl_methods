@@ -7,6 +7,7 @@ Copyright 2018 Aaron Snoswell
 import warnings
 import numpy as np
 from cvxopt import matrix, solvers
+from pprint import pprint
 
 
 def linear_programming(
@@ -209,6 +210,9 @@ def linear_programming(
     from cvxopt import matrix, solvers
     solvers.options['show_progress'] = verbose
     res = solvers.lp(matrix(c[0, :]), matrix(A_ub), matrix(b_ub))
+
+    if verbose:
+        pprint(res)
 
     def normalize(vals):
         """
@@ -422,6 +426,9 @@ def large_linear_programming(
     # NB: cvxopt.solvers.lp expects a 1d c vector
     solvers.options['show_progress'] = verbose
     res = solvers.lp(matrix(c[0, :]), matrix(a_ub), matrix(b_ub))
+
+    if verbose:
+        pprint(res)
 
     # Extract the true optimisation variables
     alpha_vector = np.array(res['x'][0:num_basis_functions].T)
@@ -754,9 +761,6 @@ def demo():
         ACTION_STRINGS
     )
 
-    # Truncate numpy float decimal points
-    np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
-
     #endregion
 
     # region === GridWorld parameters
@@ -879,11 +883,13 @@ def demo():
         verbose=True
     )
 
+    print("Recovered reward vector:")
+    print("{}".format(lp_reward))
+
     #endregion
 
     # region === LLP IRL
     ##################################################################
-    print("")
 
     # Sample some states
     state_sample = np.random.uniform(0, 1, (num_samples, 2))
@@ -939,7 +945,8 @@ def demo():
         verbose=True
     )
 
-    print("Recovered alpha vector:\n{}".format(alpha_vector))
+    print("Recovered alpha vector:")
+    print("{}".format(alpha_vector))
 
     # Compose reward function lambda
     cts_reward = lambda s: (alpha_vector @ basis_vector_fn(s))[0]
@@ -1105,7 +1112,7 @@ def demo():
     # Add colorbar
     plt.sca(grid[0])
     plt.yticks([])
-    plt.colorbar(cax=grid[5].cax)
+    plt.colorbar(cax=grid[0].cax)
 
     plt.show()
 
