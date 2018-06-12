@@ -16,6 +16,8 @@ from gym.utils import seeding
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+from irl_methods.mdp.value_iteration import value_iteration
+
 
 # Edge mode enum
 EDGEMODE_CLAMP = 0
@@ -715,6 +717,29 @@ class GridWorldDiscEnv(gym.Env):
 
         return transitions_sorted
 
+    def estimate_value(self, policy, discount, *, tol=1e-6):
+        """Estimate the value of a policy over this GridWorld
+
+        Args:
+            policy (function): Policy pi(s) -> a
+            discount (float): Discount factor
+
+            tol (float): Convergence tolerance
+
+        Returns:
+            (numpy array): Value vector v[s] -> float mapping states to
+                estimated values, found using value iteration under the given
+                policy
+        """
+        return value_iteration(
+            range(len(self._S)),
+            self.transition_tensor,
+            policy,
+            lambda s: self.ground_truth_reward[s],
+            discount,
+            tol=tol
+        )
+
 
 class GridWorldCtsEnv(gym.Env):
     """A continuous GridWorld MDP
@@ -1320,14 +1345,98 @@ class GridWorldCtsEnv(gym.Env):
 
         return _T
 
+    def estimate_value(
+            self,
+            policy,
+            discount,
+            *,
+            resolution=10,
+            transition_samples=100,
+            tol=1e-6
+    ):
+        """Estimate the value of a policy over this GridWorld by discretisation
+
+        Args:
+            policy (function): Policy pi(s) -> a
+            discount (float): Discount factor
+
+            resolution (int): Width/height of the discretisation to use
+            transition_samples (int): Number of transition samples to use
+                when estimated discrete transition matrix. If wind is 0,
+                can be 1.
+            tol (float): Convergence tolerance
+
+        Returns:
+            (numpy array): Value function v(s) -> float mapping states to
+                approximate values, found using value iteration under the given
+                policy over a discretised version of this gridworld
+        """
+
+        # Discretisation conversion lambdas
+        index2xy = lambda i: (
+            (i % resolution)/resolution + (1/resolution)*0.5,
+            (i // resolution)/resolution + (1/resolution)*0.5
+        )
+        xy2index = lambda x, y: \
+            int(max(min(y * resolution, resolution - 1), 0)) * resolution + \
+            int(max(min(x * resolution, resolution - 1), 0))
+
+        # Discretised state set
+        num_states = resolution * resolution
+        states = range(num_states)
+
+        # Naïvely compute discretised transition tensor
+        transition_tensor = np.zeros((
+            num_states,
+            len(self._A),
+            num_states
+        ), dtype=float)
+        for start_state in states:
+            for a in range(len(self._A)):
+                for sample in range(transition_samples):
+                    self.reset()
+                    self.state = index2xy(start_state)
+                    end_state, r, done, _ = self.step(a)
+                    transition_tensor[start_state, a, xy2index(*end_state)] += 1
+
+                # Normalise probabilities
+                transition_tensor[start_state, a, :] /= transition_samples
+
+
+        # Wrap policy with reverse-discretisation
+        undiscretised_policy = lambda s: policy(index2xy(s))
+
+        # Wrap reward with reverse-discretisation
+        undiscretised_reward = lambda s: self.ground_truth_reward(index2xy(s))
+
+        # Perform VI
+        values = value_iteration(
+            states,
+            transition_tensor,
+            undiscretised_policy,
+            undiscretised_reward,
+            discount,
+            tol=tol
+        )
+
+        # Reset MDP
+        self.reset()
+
+        # Wrap value function in discretisation
+        return lambda s: values[xy2index(*s)]
+
 
 def demo():
     """Simple example of how to use these classes
     """
 
+    # Truncate numpy float decimal points
+    np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
+
     # Exercise discrete gridworld
     print("Testing discrete GridWorld...")
-    gw_disc = GridWorldDiscEnv(per_step_reward=-1)
+    size = 5
+    gw_disc = GridWorldDiscEnv(size=size, per_step_reward=-1)
     policy = gw_disc.get_optimal_policy()
 
     print("Ordered transition matrix:")
@@ -1359,6 +1468,16 @@ def demo():
     gw_disc.close()
     print("Done, total reward = {}".format(reward))
 
+    discount = 0.9
+    disc_value_matrix = gw_disc.estimate_value(policy, discount)
+    print("Estimated value function with discount={}:".format(discount))
+    print(np.flipud(np.reshape(disc_value_matrix, (size, size))))
+    fig = plt.figure()
+    gw_disc.plot_reward(fig.gca(), disc_value_matrix)
+    plt.colorbar()
+    plt.title("Estimated value function")
+    plt.show()
+
     # Exercise cts gridworld
     print("Testing continuous GridWorld...")
     gw_cts = GridWorldCtsEnv(per_step_reward=-1)
@@ -1387,33 +1506,64 @@ def demo():
     gw_cts.close()
     print("Done, total reward = {}".format(reward))
 
-    # Test trajectory rendering on wrapping gridworlds
-    # gw_cts = GridWorldCtsEnv(edge_mode=EDGEMODE_WRAP)
-    # fig = plt.figure()
-    # ax = fig.gca()
-    # gw_cts.plot_trajectories(
-    #     ax,
-    #     [
-    #         [
-    #             (np.array((0.3, 0.95)), None),
-    #             (np.array((0.4, 0.05)), None),
-    #         ],
-    #         [
-    #             (np.array((0.5, 0.05)), None),
-    #             (np.array((0.6, 0.95)), None),
-    #         ],
-    #         [
-    #             (np.array((0.95, 0.3)), None),
-    #             (np.array((0.05, 0.4)), None),
-    #         ],
-    #         [
-    #             (np.array((0.05, 0.5)), None),
-    #             (np.array((0.95, 0.6)), None),
-    #         ],
-    #     ],
-    #     alpha=1
-    # )
-    # plt.show()
+    discount = 0.9
+    resolution = 10
+    value_fn = gw_cts.estimate_value(
+        policy,
+        discount,
+        resolution=resolution
+    )
+    cts_value_matrix = np.array([
+        value_fn((
+            x/resolution + (1/resolution)*0.5,
+            y/resolution + (1/resolution)*0.5
+        ))
+        for y in range(resolution)
+        for x in range(resolution)
+    ])
+    print("Estimated value function with discount={}, resolution={}:".format(
+        discount,
+        resolution
+    ))
+    print(np.flipud(np.reshape(cts_value_matrix, (resolution, resolution))))
+    fig = plt.figure()
+    gw_cts.plot_reward(
+        fig.gca(),
+        value_fn,
+        min(cts_value_matrix),
+        max(cts_value_matrix)
+    )
+    plt.colorbar()
+    plt.title("Estimated value function")
+    plt.show()
+
+    # Test trajectory rendering on a wrapping gridworld
+    gw_cts = GridWorldCtsEnv(edge_mode=EDGEMODE_WRAP)
+    fig = plt.figure()
+    ax = fig.gca()
+    gw_cts.plot_trajectories(
+        ax,
+        [
+            [
+                (np.array((0.3, 0.95)), None),
+                (np.array((0.4, 0.05)), None),
+            ],
+            [
+                (np.array((0.5, 0.05)), None),
+                (np.array((0.6, 0.95)), None),
+            ],
+            [
+                (np.array((0.95, 0.3)), None),
+                (np.array((0.05, 0.4)), None),
+            ],
+            [
+                (np.array((0.05, 0.5)), None),
+                (np.array((0.95, 0.6)), None),
+            ],
+        ],
+        alpha=1
+    )
+    plt.show()
 
 
 if __name__ == "__main__":
