@@ -13,6 +13,8 @@ from .dacadc import adc, dac
 from .transform import make_gridworld
 from .plot import plot_trajectory_4d
 
+# We want direct access to everything in utils, so add the individual objects
+#  to the __all__ list here
 __all__ = [
     "gaussian", "indicator",
     "rollout",
