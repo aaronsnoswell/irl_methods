@@ -1094,7 +1094,7 @@ class GridWorldCtsEnv(gym.Env):
             pivot="mid",
             edgecolor="black",
             facecolor="white",
-            linewidth=0.25
+            linewidth=0
         )
 
     def plot_trajectories(self, ax, trajectories, *, line_width=0.3, alpha=0.3):
