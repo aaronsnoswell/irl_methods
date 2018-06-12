@@ -8,7 +8,10 @@ Copyright 2018 Aaron Snoswell
 """
 
 from .gridworld import GridWorldDiscEnv, GridWorldCtsEnv
+from .value_iteration import value_iteration
 
+# Import only modules in this submodule's __all__ list
 __all__ = [
-    "gridworld"
+    "gridworld",
+    "value_iteration"
 ]
