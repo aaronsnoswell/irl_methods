@@ -22,19 +22,20 @@ def rollout(mdp, start_state, policy, *, max_length=math.inf):
         (list): A list of the rewards received after each action
     """
 
-    state = start_state
+    # Reset the MDP and set the initial state
+    mdp.reset()
+    mdp.state = start_state
+
     trajectory = []
     rewards = []
     while True:
         # Query the policy for an action
-        action = policy(state)
+        action = policy(mdp.state)
 
         # Store the (s, a) tuple
-        trajectory.append((state, action))
+        trajectory.append((mdp.state, action))
 
         # Take that action
-        mdp.reset()
-        mdp.state = state
         state, reward, done, status = mdp.step(action)
         rewards.append(reward)
 
@@ -43,6 +44,6 @@ def rollout(mdp, start_state, policy, *, max_length=math.inf):
             break
 
     # Add final action
-    trajectory.append((state, None))
+    trajectory.append((mdp.state, None))
 
     return trajectory, rewards
