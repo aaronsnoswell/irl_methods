@@ -466,8 +466,8 @@ def trajectory_linear_programming(
         discount_factor (float): Expert's discount factor
         num_iterations (int): Number of iterations to loop for
         solver (function): A function that solves an mdp to find an optimal
-            policy. Should take a gym.Env object, and return a policy function
-            pi(s) -> a mapping states to actions
+            policy. Should take a gym.Env object and a reward function,
+            and return a policy function pi(s) -> a mapping states to actions
 
         penalty_coefficient (float): Penalty function coefficient. Ng and
             Russell find 2 is robust. Must be >= 1.
@@ -654,7 +654,7 @@ def trajectory_linear_programming(
             # Compose a new reward function
             new_reward_fn = lambda s: (
                     alpha_vector @ np.array([bfn(s) for bfn in basis_functions])
-            )
+            )[0]
 
             def _step(self, action):
                 """Overload an MDP's reward function
@@ -687,7 +687,7 @@ def trajectory_linear_programming(
 
             # Call the provided solver to find a policy that maximises V under
             # the new reward function
-            policy_set.append(solver(mdp))
+            policy_set.append(solver(mdp, new_reward_fn))
 
         # Estimate the value of the newest policy
         policy_discounted_feature_expectations = np.vstack((
@@ -978,11 +978,56 @@ def demo():
         lambda s: gw_disc.get_state_features(s=s)[1]
     ]
 
-    def solver(mdp):
-        """Solves the given MDP to find a policy
+    def solver(mdp, reward):
+        """Solves a GridWorldDiscEnv MDP using policy iteration to find a policy
+
+        Args:
+            mdp (GridWorldDiscEnv): MDP with a valid reward function to solve
+            reward (function): Reward function r(s) -> float
+
+        Returns:
+            (function): Policy pi(s) -> a that acts optimally with respect to
+                the given MDP's reward function
         """
-        print(mdp)
-        return lambda s: 0
+
+        # Convergence tolerance for the value function
+        tol = 1e-6
+
+        # Max number of PI iterations
+        max_num_iterations = 10
+
+        # Start with random policy and zero value vector
+        pi = lambda s: mdp.action_space.sample()
+        v = np.zeros(len(mdp._S))
+
+        print("Running PI")
+
+        i = 0
+        while True:
+            i += 1
+
+            print("PI step {}".format(i))
+
+            # Update value
+            v_new = mdp.estimate_value(
+                pi,
+                discount_factor,
+                reward=reward,
+                max_iterations=1000
+            )
+            delta = v_new - v
+            v = v_new
+            print("PI: Value delta is: {}".format(np.linalg.norm(delta)))
+
+            # Get new greedy policy
+            pi = mdp.greedy_policy(v_new)
+
+            if np.linalg.norm(delta) < tol or i >= max_num_iterations:
+                break
+
+        print("Got new policy!!!")
+
+        return pi
 
     alpha_vector = trajectory_linear_programming(
         gw_disc,
@@ -993,6 +1038,38 @@ def demo():
         solver,
         verbose=True
     )
+
+    tlp_reward_fn = lambda s: (alpha_vector @ [bf(s) for bf in basis_functions])[0]
+    tlp_reward_vector = [tlp_reward_fn(s) for s in range(num_states)]
+
+    # Plot results
+    fig = plt.figure()
+    plt.suptitle('Trajectory-based Linear Programming IRL')
+    plt.set_cmap("viridis")
+
+    # Plot ground truth reward
+    ax = plt.subplot(1, 3, 1)
+    gw_disc.plot_reward(ax, gw_disc.ground_truth_reward)
+    plt.title("Ground truth reward")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    # Plot provided policy
+    #ax = plt.subplot(1, 3, 2)
+    #gw_disc.plot_policy(ax, disc_optimal_policy)
+    plt.title("Provided trajectories")
+
+    # Plot recovered reward
+    ax = plt.subplot(1, 3, 3)
+    gw_disc.plot_reward(ax, tlp_reward_vector)
+    plt.title("IRL result")
+    plt.colorbar(
+        cax=make_axes_locatable(ax).append_axes("right", size="5%", pad=0.05)
+    )
+
+    plt.tight_layout()
+    plt.show()
 
     # endregion
 
