@@ -549,7 +549,7 @@ class GridWorldDiscEnv(gym.Env):
             (numpy array): Feature vector for the given state
         """
 
-        s = s or self.state
+        s = s if s is not None else self.state
 
         if feature_map == FEATUREMAP_COORD:
             # Features are (x, y) coordinate tuples
@@ -1263,7 +1263,7 @@ class GridWorldCtsEnv(gym.Env):
             (numpy array): Feature vector for the given state
         """
 
-        s = s or self.state
+        s = s if s is not None else self.state
 
         if feature_map == FEATUREMAP_COORD:
             # Features are (x, y) coordinate tuples
