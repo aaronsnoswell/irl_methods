@@ -8,6 +8,7 @@ import warnings
 import numpy as np
 from cvxopt import matrix, solvers
 from pprint import pprint
+from copy import copy
 
 from irl_methods.utils import rollout
 
@@ -451,6 +452,7 @@ def trajectory_linear_programming(
     basis_functions,
     discount_factor,
     num_iterations,
+    solver,
     *,
     penalty_coefficient=2.0,
     verbose=True
@@ -463,6 +465,9 @@ def trajectory_linear_programming(
         basis_functions (list): List of basis functions b(s) -> float
         discount_factor (float): Expert's discount factor
         num_iterations (int): Number of iterations to loop for
+        solver (function): A function that solves an mdp to find an optimal
+            policy. Should take a gym.Env object, and return a policy function
+            pi(s) -> a mapping states to actions
 
         penalty_coefficient (float): Penalty function coefficient. Ng and
             Russell find 2 is robust. Must be >= 1.
@@ -586,11 +591,6 @@ def trajectory_linear_programming(
         shape=(0, v_hat_pi_star.shape[1])
     )
 
-    # Pick an initial, random policy
-    policy_set.append(
-        lambda s: mdp.action_space.sample()
-    )
-
     def add_optimal_expert_constraints(c, a_ub, b_ub):
         """Add constraints and augment the objective to make the expert optimal
 
@@ -638,6 +638,57 @@ def trajectory_linear_programming(
     alpha_vector = None
     for i in range(num_iterations):
 
+        if alpha_vector is None:
+
+            # First iteration - pick an initial, random policy
+            policy_set.append(
+                lambda s: mdp.action_space.sample()
+            )
+
+        else:
+
+            # Make a copy of the MPD
+            mdp_copy = copy(mdp)
+            mdp_copy.reset()
+
+            # Compose a new reward function
+            new_reward_fn = lambda s: (
+                    alpha_vector @ np.array([bfn(s) for bfn in basis_functions])
+            )
+
+            def _step(self, action):
+                """Overload an MDP's reward function
+
+                Args:
+                    action (object): an action provided by the environment
+
+                Returns:
+                    observation (object): agent's observation of the current
+                        environment
+                    reward (float) : amount of reward returned after previous
+                        action
+                    done (boolean): whether the episode has ended, in which
+                        case further step() calls will return undefined results
+                    info (dict): contains auxiliary diagnostic information
+                        (helpful for debugging, and sometimes learning)
+                """
+
+                # Call original function
+                s, r, d, i = self._step()
+
+                # Replace reward
+                r = new_reward_fn(s)
+
+                return s, r, d, i
+
+            # Overload the MDP to use a new reward function
+            mdp_copy._step = mdp_copy.step
+            mdp_copy.step = _step
+
+            # Call the provided solver to find a policy that maximises V under
+            # the new reward function
+            policy_set.append(solver(mdp))
+
         # Estimate the value of the newest policy
         policy_discounted_feature_expectations = np.vstack((
             policy_discounted_feature_expectations,
@@ -677,17 +728,6 @@ def trajectory_linear_programming(
         alpha_vector = np.array(res['x'][0:d].T)
 
         print(alpha_vector)
-
-        # Compose the new reward function
-        new_reward_fn = lambda s: (
-                alpha_vector @ np.array([bfn(s) for bfn in basis_functions])
-        )
-
-        # Find a policy that maximises V under the new reward function
-        # TODO ajs 19/Jun/2018
-        policy_set.append(
-            lambda s: 0
-        )
 
     return alpha_vector
 
@@ -938,12 +978,19 @@ def demo():
         lambda s: gw_disc.get_state_features(s=s)[1]
     ]
 
+    def solver(mdp):
+        """Solves the given MDP to find a policy
+        """
+        print(mdp)
+        return lambda s: 0
+
     alpha_vector = trajectory_linear_programming(
         gw_disc,
         trajectories,
         basis_functions,
         discount_factor,
         num_iterations,
+        solver,
         verbose=True
     )
 
