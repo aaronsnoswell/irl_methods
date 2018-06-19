@@ -761,6 +761,40 @@ class GridWorldDiscEnv(gym.Env):
             max_iterations=max_iterations
         )
 
+    def greedy_policy(self, value_vector):
+        """Get policy that is greedy with respect to a value vector
+
+        Args:
+            value_vector (numpy array): Numpy array of values for each state
+
+        Returns:
+            (function): Policy function pi(s) -> a mapping states to actions
+        """
+
+        def greedy_policy(s):
+            """Greedy policy function
+
+            Args:
+                s (any): Current state
+
+            Returns:
+                (any): New action
+            """
+            # Try each possible action and see what value we get in the next
+            # state
+
+            next_state_values = []
+            for action in range(len(self._A)):
+                self.reset()
+                self.state = s
+                s, r, d, i = self.step(action)
+                next_state_values.append(value_vector[s])
+
+            # Act greedily
+            return next_state_values.index(max(next_state_values))
+
+        return greedy_policy
+
 
 class GridWorldCtsEnv(gym.Env):
     """A continuous GridWorld MDP
