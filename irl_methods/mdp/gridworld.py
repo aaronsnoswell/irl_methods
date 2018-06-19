@@ -722,7 +722,15 @@ class GridWorldDiscEnv(gym.Env):
 
         return transitions_sorted
 
-    def estimate_value(self, policy, discount, *, reward=None, tol=1e-6):
+    def estimate_value(
+            self,
+            policy,
+            discount,
+            *,
+            reward=None,
+            tol=1e-6,
+            max_iterations=float("inf")
+    ):
         """Estimate the value of a policy over this GridWorld
 
         Args:
@@ -732,6 +740,7 @@ class GridWorldDiscEnv(gym.Env):
             reward (function): Alternate reward function to use. None to use
                 default.
             tol (float): Convergence tolerance
+            max_iterations (int): Maximum number of iterations
 
         Returns:
             (numpy array): Value vector v[s] -> float mapping states to
@@ -748,7 +757,8 @@ class GridWorldDiscEnv(gym.Env):
             policy,
             reward,
             discount,
-            tol=tol
+            tol=tol,
+            max_iterations=max_iterations
         )
 
 
