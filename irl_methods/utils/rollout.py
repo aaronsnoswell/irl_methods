@@ -18,8 +18,7 @@ def rollout(mdp, start_state, policy, *, max_length=math.inf):
         max_length: Maximum trajectory length
 
     Returns:
-        (list): A single trajectory, as list of (s, a) pairs
-        (list): A list of the rewards received after each action
+        (list): A single trajectory, as list of (s, a, r) pairs
     """
 
     # Reset the MDP and set the initial state
@@ -27,23 +26,26 @@ def rollout(mdp, start_state, policy, *, max_length=math.inf):
     mdp.state = start_state
 
     trajectory = []
-    rewards = []
     while True:
+
+        # Copy starting state
+        start_state = mdp.state
+
         # Query the policy for an action
         action = policy(mdp.state)
 
-        # Store the (s, a) tuple
-        trajectory.append((mdp.state, action))
-
         # Take that action
         state, reward, done, status = mdp.step(action)
-        rewards.append(reward)
+
+        # Store the (s, a, r) tuple
+        trajectory.append((start_state, action, reward))
 
         # Check exit conditions
         if done or len(trajectory) > max_length:
+
+            # Append the final state
+            trajectory.append((mdp.state, None, None))
+
             break
 
-    # Add final action
-    trajectory.append((mdp.state, None))
-
-    return trajectory, rewards
+    return trajectory

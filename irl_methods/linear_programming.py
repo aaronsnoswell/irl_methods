@@ -522,7 +522,7 @@ def trajectory_linear_programming(
 
         trajectories = []
         for s0 in start_state_set:
-            trajectory, _ = rollout(
+            trajectory = rollout(
                 mdp,
                 s0,
                 policy,
@@ -530,7 +530,7 @@ def trajectory_linear_programming(
             )
 
             # Slice out just the state trajectory and append it
-            trajectories.append([sa[0] for sa in trajectory])
+            trajectories.append([sar[0] for sar in trajectory])
 
         return trajectories
 
@@ -922,7 +922,7 @@ def demo():
     # Roll out some trajectories to use for TLP
     trajectories = []
     for i in range(num_trajectories):
-        trajectory, _ = rollout(
+        trajectory = rollout(
             gw_disc,
             gw_disc.observation_space.sample(),
             disc_optimal_policy,
@@ -930,7 +930,7 @@ def demo():
         )
 
         # Slice out just the state trajectory and append it
-        trajectories.append([sa[0] for sa in trajectory])
+        trajectories.append([sar[0] for sar in trajectory])
 
     # A vector of basis functions
     basis_functions = [
