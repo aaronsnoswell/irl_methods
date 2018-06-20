@@ -451,10 +451,11 @@ def trajectory_linear_programming(
     trajectories,
     basis_functions,
     discount_factor,
-    num_iterations,
     solver,
     *,
     penalty_coefficient=2.0,
+    num_iterations=float("inf"),
+    tolerance=1e-6,
     verbose=True
 ):
     """Trajectory-based Linear Programming IRL by Ng and Russell, 2000
@@ -464,13 +465,14 @@ def trajectory_linear_programming(
         trajectories (list): List of state trajectories from the expert
         basis_functions (list): List of basis functions b(s) -> float
         discount_factor (float): Expert's discount factor
-        num_iterations (int): Number of iterations to loop for
         solver (function): A function that solves an mdp to find an optimal
             policy. Should take a gym.Env object and a reward function,
             and return a policy function pi(s) -> a mapping states to actions
 
         penalty_coefficient (float): Penalty function coefficient. Ng and
             Russell find 2 is robust. Must be >= 1.
+        num_iterations (int): Number of iterations to loop for
+        tolerance (float): Convergence tolerance for the reward coefficients
         verbose (bool): Print status information
 
     Returns:
@@ -636,7 +638,12 @@ def trajectory_linear_programming(
 
     # Iterate the requested number of times
     alpha_vector = None
-    for i in range(num_iterations):
+    i = 0
+    while True:
+        i += 1
+
+        if verbose:
+            print("TLP: Iteration={}, alpha_vector={}".format(i, alpha_vector))
 
         if alpha_vector is None:
 
@@ -704,6 +711,9 @@ def trajectory_linear_programming(
             )
         ))
 
+        if verbose:
+            print("Composing LP problem...")
+
         # Form the LP problem
         c = np.zeros((1, d), dtype=float)
         a_ub = np.zeros((0, c.shape[1]), dtype=float)
@@ -725,9 +735,14 @@ def trajectory_linear_programming(
             pprint(res)
 
         # Extract the true optimisation variables
-        alpha_vector = np.array(res['x'][0:d].T)
+        new_alpha_vector = np.array(res['x'][0:d].T)
+        delta = [float("inf")]
+        if alpha_vector is not None:
+            delta = alpha_vector - new_alpha_vector
+        alpha_vector = new_alpha_vector
 
-        print(alpha_vector)
+        if i > num_iterations or np.linalg.norm(delta) <= tolerance:
+            break
 
     return alpha_vector
 
@@ -994,7 +1009,7 @@ def demo():
         tol = 1e-6
 
         # Max number of PI iterations
-        max_num_iterations = 10
+        max_num_iterations = 5
 
         # Start with random policy and zero value vector
         pi = lambda s: mdp.action_space.sample()
@@ -1025,7 +1040,7 @@ def demo():
             if np.linalg.norm(delta) < tol or i >= max_num_iterations:
                 break
 
-        print("Got new policy!!!")
+        print("PI: Found new policy")
 
         return pi
 
@@ -1034,10 +1049,11 @@ def demo():
         trajectories,
         basis_functions,
         discount_factor,
-        num_iterations,
         solver,
         verbose=True
     )
+
+    print("Got final alpha vector: {}".format(alpha_vector))
 
     tlp_reward_fn = lambda s: (alpha_vector @ [bf(s) for bf in basis_functions])[0]
     tlp_reward_vector = [tlp_reward_fn(s) for s in range(num_states)]
